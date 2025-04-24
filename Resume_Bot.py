@@ -99,6 +99,7 @@ async def post_init(application):
         BotCommand("premium", "Premium features info"),
         BotCommand("redeem", "Redeem premium key"),
         BotCommand("help", "Get help"),
+        BotCommand("privacy", "View privacy policy"),  # New command
         BotCommand("cancel", "Cancel current operation"),
     ]
     await application.bot.set_my_commands(commands)
@@ -110,11 +111,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("✨ Create New Resume", callback_data="new_resume")],
         [InlineKeyboardButton("💎 Premium Features", callback_data="premium_features")],
         [InlineKeyboardButton("ℹ️ Help", callback_data="show_help")],
+        [InlineKeyboardButton("🔒 Privacy Policy", callback_data="privacy_policy")],  # New button
     ]
 
     user = update.effective_user
     greeting = (
-        f"🌟 *Welcome to ResumeGenie Pro*, {user.first_name}!\n\n"
+        f"🌟 *Welcome to ResumeGenie*, {user.first_name}!\n\n"
         "I can help you create professional resumes in minutes. "
         "Choose an option below to get started."
     )
@@ -140,7 +142,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown",
         )
 
-
 async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await show_premium_features(update, context)
 
@@ -159,6 +160,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "show_help": show_help,
         "back_to_main": start,
         "get_premium": get_premium,
+        "privacy_policy": show_privacy_policy,  # New handler
     }
 
     if query.data in handlers:
@@ -210,7 +212,39 @@ Need more help? Contact @techdb009
         help_text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-
+async def show_privacy_policy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    privacy_policy_url = "https://yourdomain.com/privacy_policy.html"  # Replace with your actual URL
+    
+    keyboard = [
+        [InlineKeyboardButton("⬅️ Back", callback_data="back_to_main")],
+    ]
+    
+    message = (
+        "🔒 *Privacy Policy*\n\n"
+        "We take your privacy seriously. Please read our privacy policy at:\n"
+        f"[Privacy Policy Page]({privacy_policy_url})\n\n"
+        "Key points:\n"
+        "- We don't store your personal data\n"
+        "- Your resume information is processed temporarily\n"
+        "- No data sharing with third parties"
+    )
+    
+    if query:
+        await query.edit_message_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown",
+            disable_web_page_preview=True
+        )
+    else:
+        await update.message.reply_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown",
+            disable_web_page_preview=True
+        )
+        
 async def new_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query if update.callback_query else None
     user_id = update.effective_user.id
@@ -841,13 +875,11 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif update.message:
         await update.message.reply_text("❌ An error occurred. Please try again.")
 
-
 def main():
+    # Initialize the bot application
     app = (
         ApplicationBuilder()
-        .token(
-            TOKEN
-        )  # Add your bot token here
+        .token(TOKEN)
         .post_init(post_init)
         .build()
     )
@@ -862,9 +894,7 @@ def main():
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
             CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_contact)],
             EDUCATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_education)],
-            EXPERIENCE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, get_experience)
-            ],
+            EXPERIENCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_experience)],
             SKILLS: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_skills)],
             SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
         },
@@ -876,6 +906,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("premium", premium_command))
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("privacy", privacy_command))  # New handler
     app.add_handler(CommandHandler("generatekey", generate_key))
     app.add_handler(CommandHandler("redeem", redeem_key))
     app.add_handler(conv_handler)
@@ -884,11 +915,20 @@ def main():
     # Error handler
     app.add_error_handler(error_handler)
 
-    print("Bot is running...")
-    app.run_polling()
-
+    print("Bot is running as background worker...")
+    
+    # Run the bot with automatic restart on failure
+    while True:
+        try:
+            app.run_polling()
+        except Exception as e:
+            print(f"Bot crashed with error: {e}")
+            print("Restarting in 5 seconds...")
+            time.sleep(5)
 
 if __name__ == "__main__":
+    import time  # Add this import at the top of your file
+    
     # Initialize database if not exists
     if not os.path.exists(DATABASE_PATH):
         with open(DATABASE_PATH, "w") as f:
