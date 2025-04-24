@@ -214,7 +214,7 @@ Need more help? Contact @techdb009
 
 async def show_privacy_policy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    privacy_policy_url = "https://mrthantdgaf.github.io/resumegenie/privacy_policy"  # Replace with your actual URL
+    privacy_policy_url = "https://mrthantdgaf.github.io/resumegenie/privacy_policy.html"  # Replace with your actual URL
     
     keyboard = [
         [InlineKeyboardButton("⬅️ Back", callback_data="back_to_main")],
