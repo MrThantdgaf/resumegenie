@@ -846,7 +846,7 @@ def main():
     app = (
         ApplicationBuilder()
         .token(
-            "TOKEN"
+            TOKEN
         )  # Add your bot token here
         .post_init(post_init)
         .build()
