@@ -886,8 +886,8 @@ def main():
 
 if __name__ == "__main__":
     # Initialize database if not exists
-    if not os.path.exists(DB_FILE):
-        with open(DB_FILE, "w") as f:
+    if not os.path.exists(DATABASE_PATH):
+        with open(DATABASE_PATH, "w") as f:
             json.dump({"keys": {}, "premium_users": {}}, f)
 
     main()
