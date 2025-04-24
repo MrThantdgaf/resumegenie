@@ -22,6 +22,9 @@ from fpdf import FPDF
 import os, json, uuid, io
 from datetime import datetime, timedelta
 
+# Global dictionary to store user data during the conversation
+user_data = {}
+
 
 # Define states for conversation as simple integers
 NAME, CONTACT, EDUCATION, EXPERIENCE, SKILLS, SUMMARY, TEMPLATE = range(7)
