@@ -40,9 +40,7 @@ TEMPLATES = {
 # Fetch TOKEN and ADMIN_ID from environment variables
 TOKEN = os.getenv("TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
-PREMIUM_DATA_PATH = "/etc/secrets/premium_data.json"
-# Update database file path to the new secret file
-DATABASE_PATH = os.getenv("PREMIUM_DATA_PATH", "premium_data.json")
+DATABASE_PATH = "/etc/secrets/premium_data.json"
 
 if not TOKEN:
     raise RuntimeError("Telegram bot TOKEN is missing. Please set it as an environment variable.")
