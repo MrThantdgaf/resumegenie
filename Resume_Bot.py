@@ -38,7 +38,7 @@ TEMPLATES = {
 }
 
 # Fetch TOKEN and ADMIN_ID from environment variables
-TOKEN = os.getenv("BOT_TOKEN")
+TOKEN = os.getenv("TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
 
 # Update database file path to the new secret file
