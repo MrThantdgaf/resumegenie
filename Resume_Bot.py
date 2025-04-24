@@ -42,6 +42,10 @@ TOKEN = os.getenv("TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
 DATABASE_PATH = "/etc/secrets/premium_data.json"
 
+# Debug logs - REMOVE after verifying
+print("TOKEN (debug):", repr(TOKEN))
+print("ADMIN_ID (debug):", repr(ADMIN_ID))
+
 if not TOKEN:
     raise RuntimeError("Telegram bot TOKEN is missing. Please set it as an environment variable.")
 
