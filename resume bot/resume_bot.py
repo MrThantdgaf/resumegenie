@@ -22,6 +22,7 @@ from fpdf import FPDF
 import os, json, uuid, io
 from datetime import datetime, timedelta
 
+
 # Define states for conversation as simple integers
 NAME, CONTACT, EDUCATION, EXPERIENCE, SKILLS, SUMMARY, TEMPLATE = range(7)
 
@@ -32,47 +33,40 @@ TEMPLATES = {
     "CREATIVE": "🎨 Creative (Premium)",
     "MINIMALIST": "✂️ Minimalist (Premium)",
 }
-with open("/etc/secrets/secrets.json") as f:
-    config = json.load(f)
-    
-TOKEN = config["BOT_TOKEN"]
-ADMIN_ID = config["ADMIN_ID"]
 
-DATABASE_PATH = "/etc/secrets/firebase-key.json"
+# Fetch TOKEN and ADMIN_ID from environment variables
+TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_ID = os.getenv("ADMIN_ID")
 
-def load_db():
-    with open(DATABASE_PATH, "r") as f:
-        data = json.load(f)
-    return data
-DB_FILE = DATABASE_PATH
-
-# Temp storage for resume building
-user_data = {}
-
+# Update database file path to the new secret file
+DATABASE_PATH = os.getenv("PREMIUM_DATA_PATH", "premium_data.json")
 
 def load_db():
-    if not os.path.exists(DB_FILE):
-        with open(DB_FILE, "w") as f:
+    if not os.path.exists(DATABASE_PATH):
+        with open(DATABASE_PATH, "w") as f:
             json.dump({"keys": {}, "premium_users": {}}, f)
 
     try:
-        with open(DB_FILE, "r") as f:
+        with open(DATABASE_PATH, "r") as f:
             return json.load(f)
     except (json.JSONDecodeError, FileNotFoundError):
         data = {"keys": {}, "premium_users": {}}
-        with open(DB_FILE, "w") as f:
+        with open(DATABASE_PATH, "w") as f:
             json.dump(data, f)
         return data
-
 
 def save_db(data):
     clean_data = {
         "keys": data.get("keys", {}),
         "premium_users": data.get("premium_users", {}),
     }
-    with open(DB_FILE, "w") as f:
+    with open(DATABASE_PATH, "w") as f:
         json.dump(clean_data, f, indent=2)
 
+# Ensure the database file is initialized
+if not os.path.exists(DATABASE_PATH):
+    with open(DATABASE_PATH, "w") as f:
+        json.dump({"keys": {}, "premium_users": {}}, f)
 
 def is_premium(user_id):
     if not user_id:
