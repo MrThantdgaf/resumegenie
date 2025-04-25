@@ -5,7 +5,6 @@ import io
 import logging
 from datetime import datetime, timedelta
 from fpdf import FPDF
-import asyncio
 
 from telegram import (
     Update,
@@ -49,7 +48,7 @@ TEMPLATES = {
 # Environment variables
 TOKEN = os.getenv("TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
-DATABASE_PATH = "premium_data.json"  # Changed to local path for Render
+DATABASE_PATH = "premium_data.json"
 
 if not TOKEN:
     raise RuntimeError("Telegram bot TOKEN is missing")
@@ -756,22 +755,6 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif update.message:
         await update.message.reply_text("❌ An error occurred. Please try again.")
 
-async def post_init(application):
-    """Post initialization - set up bot commands"""
-    logger.info("Initializing bot commands...")
-    commands = [
-        BotCommand("start", "Start the bot"),
-        BotCommand("newresume", "Create a new resume"),
-        BotCommand("premium", "Premium features info"),
-        BotCommand("redeem", "Redeem premium key"),
-        BotCommand("help", "Get help"),
-        BotCommand("privacy", "View privacy policy"),
-        BotCommand("cancel", "Cancel current operation"),
-    ]
-    await application.bot.set_my_commands(commands)
-    await application.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
-    logger.info("Bot commands initialized")
-
 def create_conversation_handler():
     """Create and return the conversation handler for resume creation"""
     return ConversationHandler(
@@ -887,6 +870,42 @@ async def show_privacy_policy(update: Update, context: ContextTypes.DEFAULT_TYPE
             disable_web_page_preview=True
         )
         
+async def post_init(application):
+    """Post initialization - set up bot commands"""
+    logger.info("Initializing bot commands...")
+    commands = [
+        BotCommand("start", "Start the bot"),
+        BotCommand("newresume", "Create a new resume"),
+        BotCommand("premium", "Premium features info"),
+        BotCommand("redeem", "Redeem premium key"),
+        BotCommand("help", "Get help"),
+        BotCommand("privacy", "View privacy policy"),
+        BotCommand("cancel", "Cancel current operation"),
+    ]
+    await application.bot.set_my_commands(commands)
+    await application.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+    logger.info("Bot commands initialized")
+
+def create_conversation_handler():
+    """Create and return the conversation handler for resume creation"""
+    return ConversationHandler(
+        entry_points=[
+            CommandHandler("newresume", new_resume),
+            CallbackQueryHandler(new_resume, pattern="^new_resume$"),
+        ],
+        states={
+            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
+            CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_contact)],
+            EDUCATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_education)],
+            EXPERIENCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_experience)],
+            SKILLS: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_skills)],
+            SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+        per_chat=True,
+        per_user=True
+    )
+
 def setup_application_handlers(application):
     """Set up all handlers for the application"""
     logger.info("Setting up application handlers...")
@@ -910,8 +929,8 @@ def setup_application_handlers(application):
     
     logger.info("Application handlers setup complete")
 
-async def main():
-    """Main application entry point"""
+async def run_bot():
+    """Run the bot with proper event loop handling"""
     try:
         # Initialize database if not exists
         if not os.path.exists(DATABASE_PATH):
@@ -934,5 +953,15 @@ async def main():
         logger.error(f"Bot crashed with error: {e}")
         raise
 
+def main():
+    """Main entry point that handles event loop creation"""
+    try:
+        import asyncio
+        asyncio.run(run_bot())
+    except KeyboardInterrupt:
+        logger.info("Bot shutdown requested...")
+    except Exception as e:
+        logger.error(f"Fatal error: {e}")
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
