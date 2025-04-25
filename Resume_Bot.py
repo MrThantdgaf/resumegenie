@@ -962,7 +962,7 @@ async def run_application():
             await application.shutdown()
 
 def main():
-    """Main entry point with proper event loop handling"""
+    """Main entry point"""
     try:
         asyncio.run(run_application())
     except KeyboardInterrupt:
