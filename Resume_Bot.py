@@ -213,7 +213,7 @@ async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /redeem - Activate premium
 /cancel - Cancel current operation
 
-Need more help? Contact @techdb009
+Need more help? Contact @techadmin009
 """
 
     keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="back_to_main")]]
@@ -663,7 +663,7 @@ async def show_premium_features(update: Update, context: ContextTypes.DEFAULT_TY
     - 1 year: $39.99 (30% off)
 
     🔑 To activate premium:
-    1. Contact @techdb009
+    1. Contact @techadmin009
     2. Get your premium key
     3. Use /redeem <key>
     """
