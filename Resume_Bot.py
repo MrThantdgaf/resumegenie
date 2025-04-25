@@ -930,7 +930,7 @@ async def run_bot_and_flask():
     app.add_error_handler(error_handler)
 
     print("✅ Bot is starting...")
-    await app.run_polling()
+    await app.run_polling(close_loop=False)
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
