@@ -894,12 +894,6 @@ async def start_web_server():
     await site.start()
     print(f"✅ HTTP server running on port {PORT}")
 
-# Add these new imports at the top
-from aiohttp import web
-import asyncio
-
-# ... (keep all your existing imports and code until the main() function) ...
-
 async def health_check(request):
     """Simple health check endpoint for Render"""
     return web.Response(text="🤖 Telegram Bot is running")
