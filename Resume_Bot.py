@@ -903,7 +903,7 @@ def create_conversation_handler():
             SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
-        per_message=True,  # Changed to True to properly track CallbackQueryHandler
+        per_message=False,  # Changed to True to properly track CallbackQueryHandler
         per_user=True
     )
 
@@ -931,35 +931,25 @@ def setup_application_handlers(application):
     logger.info("Application handlers setup complete")
 
 async def run_application():
-    """Run the bot application with proper cleanup"""
-    application = None
-    try:
-        # Initialize database if not exists
-        if not os.path.exists(DATABASE_PATH):
-            with open(DATABASE_PATH, "w") as f:
-                json.dump({"keys": {}, "premium_users": {}}, f)
-        
-        logger.info("Creating application instance...")
-        application = ApplicationBuilder() \
-            .token(TOKEN) \
-            .post_init(post_init) \
-            .build()
-        
-        # Set up all handlers
-        setup_application_handlers(application)
-        
-        logger.info("Starting bot polling...")
-        await application.run_polling(drop_pending_updates=True)
-        
-    except asyncio.CancelledError:
-        logger.info("Bot shutdown requested...")
-    except Exception as e:
-        logger.error(f"Bot crashed with error: {e}")
-        raise
-    finally:
-        if application is not None and application.running:
-            await application.stop()
-            await application.shutdown()
+    """Run the bot application"""
+    # Initialize database
+    if not os.path.exists(DATABASE_PATH):
+        with open(DATABASE_PATH, "w") as f:
+            json.dump({"keys": {}, "premium_users": {}}, f)
+
+    logger.info("Creating application instance...")
+    application = (
+        ApplicationBuilder()
+        .token(TOKEN)
+        .post_init(post_init)
+        .build()
+    )
+
+    setup_application_handlers(application)
+    logger.info("Starting bot polling...")
+
+    # Start polling (blocks until terminated)
+    await application.run_polling()
 
 def main():
     """Main entry point"""
@@ -969,6 +959,3 @@ def main():
         logger.info("Bot shutdown by user")
     except Exception as e:
         logger.error(f"Fatal error: {e}")
-
-if __name__ == "__main__":
-    main()
