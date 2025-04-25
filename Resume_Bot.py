@@ -888,7 +888,13 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def run_flask():
     flask_app.run(host="0.0.0.0", port=PORT)
 
-async def run_bot():
+
+async def run_bot_and_flask():
+    # Run Flask in background thread
+    flask_thread = Thread(target=run_flask)
+    flask_thread.start()
+
+    # Build and run Telegram bot
     app = (
         ApplicationBuilder()
         .token(TOKEN)
@@ -896,7 +902,6 @@ async def run_bot():
         .build()
     )
 
-    # Conversation handler
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("newresume", new_resume),
@@ -924,13 +929,10 @@ async def run_bot():
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_error_handler(error_handler)
 
-    print("✅ Telegram bot starting...")
+    print("✅ Bot is starting...")
     await app.run_polling()
 
 if __name__ == "__main__":
-    # Run Flask in thread
-    flask_thread = Thread(target=run_flask)
-    flask_thread.start()
-
-    # Run Telegram bot in main thread
-    asyncio.run(run_bot())
+    loop = asyncio.get_event_loop()
+    loop.create_task(run_bot_and_flask())
+    loop.run_forever()
