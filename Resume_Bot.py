@@ -23,6 +23,7 @@ from flask import Flask, request, jsonify
 
 import asyncio
 from threading import Thread
+from concurrent.futures import ThreadPoolExecutor
 
 # Initialize Flask app
 flask_app = Flask(__name__)
@@ -885,11 +886,12 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif update.message:
         await update.message.reply_text("❌ An error occurred. Please try again.")
 
-
 def run_flask():
-    flask_app.run(host="0.0.0.0", port=PORT)
+    """Run Flask in a separate thread"""
+    flask_app.run(host="0.0.0.0", port=PORT, use_reloader=False, threaded=True)
 
-async def start_bot():
+async def run_bot():
+    """Run the Telegram bot"""
     app = (
         ApplicationBuilder()
         .token(TOKEN)
@@ -911,7 +913,7 @@ async def start_bot():
             SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
-        per_message=False,
+        per_message=True,  # Changed to True to properly handle callbacks
     )
 
     app.add_handler(CommandHandler("start", start))
@@ -925,17 +927,23 @@ async def start_bot():
     app.add_error_handler(error_handler)
 
     print("✅ Telegram bot is running...")
-    await app.run_polling(close_loop=False)
+    await app.run_polling()
 
-if __name__ == "__main__":
-    # Start Flask in a separate thread
+async def main():
+    """Main async function to run both services"""
+    loop = asyncio.get_event_loop()
+    
+    # Run Flask in a separate thread
     flask_thread = Thread(target=run_flask)
-    flask_thread.daemon = True  # This ensures the thread exits when main program exits
+    flask_thread.daemon = True
     flask_thread.start()
 
-    # Run the Telegram bot in the main thread
+    # Run the bot in the main thread
+    await run_bot()
+
+if __name__ == "__main__":
     try:
-        asyncio.run(start_bot())
+        asyncio.run(main())
     except KeyboardInterrupt:
         print("Bot stopped by user")
     except Exception as e:
