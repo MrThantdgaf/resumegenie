@@ -912,16 +912,14 @@ async def start_web_server():
     await site.start()
     print(f"✅ HTTP server running on port {PORT}")
 
-async def main():
-    """Start both the web server and the Telegram bot"""
-    # Start the web server first (required for Render)
-    await start_web_server()
-    
-    # Then start the Telegram bot
+# ... [keep all your imports and existing code until the main() function] ...
+
+async def run_bot():
+    """Run the Telegram bot"""
     print("🤖 Starting Telegram bot...")
     app = ApplicationBuilder().token(TOKEN).post_init(post_init).build()
     
-    # Add all your handlers (keep your existing handler setup code)
+    # Add all your handlers
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("newresume", new_resume),
@@ -936,27 +934,42 @@ async def main():
             SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
-        per_message=False,
     )
     
+    app.add_handler(conv_handler)
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("premium", premium_command))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("privacy", show_privacy_policy))
     app.add_handler(CommandHandler("generatekey", generate_key))
     app.add_handler(CommandHandler("redeem", redeem_key))
-    app.add_handler(conv_handler)
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_error_handler(error_handler)
     
-    # Start polling
     await app.run_polling()
 
-if __name__ == "__main__":
+def run_http_server():
+    """Run the HTTP server in a separate thread"""
+    PORT = int(os.getenv("PORT", 8080))
+    handler = lambda req: (req.send_response(200), req.end_headers(), req.wfile.write(b"Bot is running"))
+    httpd = HTTPServer(('0.0.0.0', PORT), handler)
+    print(f"✅ HTTP server running on port {PORT}")
+    httpd.serve_forever()
+
+def main():
     # Initialize database if not exists
     if not os.path.exists(DATABASE_PATH):
         with open(DATABASE_PATH, "w") as f:
             json.dump({"keys": {}, "premium_users": {}}, f)
     
-    # Run the main async function
-    asyncio.run(main())
+    # Start HTTP server in a separate thread
+    http_thread = threading.Thread(target=run_http_server, daemon=True)
+    http_thread.start()
+    
+    # Run the bot in the main thread
+    asyncio.run(run_bot())
+
+if __name__ == "__main__":
+    import threading
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+    main()
