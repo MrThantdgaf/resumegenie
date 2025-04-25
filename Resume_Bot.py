@@ -931,8 +931,7 @@ def setup_application_handlers(application):
     logger.info("Application handlers setup complete")
 
 async def run_application():
-    """Run the bot application"""
-    # Initialize database
+    """Run the bot using webhooks (for Render Web Service)"""
     if not os.path.exists(DATABASE_PATH):
         with open(DATABASE_PATH, "w") as f:
             json.dump({"keys": {}, "premium_users": {}}, f)
@@ -946,16 +945,27 @@ async def run_application():
     )
 
     setup_application_handlers(application)
-    logger.info("Starting bot polling...")
 
-    # Start polling (blocks until terminated)
-    await application.run_polling()
+    logger.info("Starting bot with webhook...")
+
+    # Get Render's provided port
+    port = int(os.environ.get("PORT", 8443))
+
+    # Get the external URL of your bot (update this to your real domain)
+    webhook_url = os.environ.get("WEBHOOK_URL")  # You must set this in Render env vars
+
+    await application.run_webhook(
+        listen="0.0.0.0",
+        port=port,
+        url_path="",  # Or "webhook" if you want a path
+        webhook_url=webhook_url,
+    )
 
 def main():
-    """Main entry point"""
     try:
         asyncio.run(run_application())
     except KeyboardInterrupt:
         logger.info("Bot shutdown by user")
     except Exception as e:
         logger.error(f"Fatal error: {e}")
+
