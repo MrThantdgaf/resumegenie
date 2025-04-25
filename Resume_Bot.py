@@ -963,26 +963,12 @@ async def run_application():
 
 def main():
     """Main entry point with proper event loop handling"""
-    # Enable tracemalloc for debugging if needed
-    # import tracemalloc
-    # tracemalloc.start()
-    
     try:
-        # Get or create event loop
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        # Run the application
-        loop.run_until_complete(run_application())
-        
+        asyncio.run(run_application())
     except KeyboardInterrupt:
         logger.info("Bot shutdown by user")
     except Exception as e:
         logger.error(f"Fatal error: {e}")
-    finally:
-        # Properly close the event loop
-        if not loop.is_closed():
-            loop.close()
 
 if __name__ == "__main__":
     main()
