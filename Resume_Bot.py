@@ -928,12 +928,15 @@ async def start_bot():
     await app.run_polling(close_loop=False)
 
 if __name__ == "__main__":
+    # Start Flask in a separate thread
     flask_thread = Thread(target=run_flask)
+    flask_thread.daemon = True  # This ensures the thread exits when main program exits
     flask_thread.start()
 
+    # Run the Telegram bot in the main thread
     try:
-        loop = asyncio.get_event_loop()
-        loop.create_task(start_bot())
-        loop.run_forever()
-    except RuntimeError as e:
-        print("❌ Failed to start event loop:", e)
+        asyncio.run(start_bot())
+    except KeyboardInterrupt:
+        print("Bot stopped by user")
+    except Exception as e:
+        print(f"Bot stopped with error: {e}")
