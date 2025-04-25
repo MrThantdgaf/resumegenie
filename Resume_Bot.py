@@ -910,7 +910,7 @@ async def run_bot():
             SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
-        per_message=True  # Changed to True to avoid warning
+        per_message=False  # Changed to True to avoid warning
     )
     
     app.add_handler(conv_handler)
