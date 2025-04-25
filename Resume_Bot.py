@@ -658,9 +658,9 @@ async def show_premium_features(update: Update, context: ContextTypes.DEFAULT_TY
     - Regular template updates
 
     💰 *Pricing Plans*
-    - 1 month: $4.99
-    - 3 months: $12.99 (15% off)
-    - 1 year: $39.99 (30% off)
+    - 1 month: 19,000 MMK
+    - 3 months: 50,000 MMK (15% off)
+    - 1 year: 159,600 MMK (30% off)
 
     🔑 To activate premium:
     1. Contact @techadmin009
