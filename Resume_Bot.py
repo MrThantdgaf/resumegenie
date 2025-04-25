@@ -884,62 +884,55 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif update.message:
         await update.message.reply_text("❌ An error occurred. Please try again.")
 
-def run_bot():
-    """Function to run the Telegram bot in the background thread with event loop"""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-    app = (
-        ApplicationBuilder()
-        .token(TOKEN)
-        .post_init(post_init)
-        .build()
-    )
-
-    # Conversation handler
-    conv_handler = ConversationHandler(
-        entry_points=[
-            CommandHandler("newresume", new_resume),
-            CallbackQueryHandler(new_resume, pattern="^new_resume$"),
-        ],
-        states={
-            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
-            CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_contact)],
-            EDUCATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_education)],
-            EXPERIENCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_experience)],
-            SKILLS: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_skills)],
-            SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-        per_message=False,
-    )
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("premium", premium_command))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("privacy", show_privacy_policy))
-    app.add_handler(CommandHandler("generatekey", generate_key))
-    app.add_handler(CommandHandler("redeem", redeem_key))
-    app.add_handler(conv_handler)
-    app.add_handler(CallbackQueryHandler(button_handler))
-    app.add_error_handler(error_handler)
-
-    print("Bot is running as background worker...")
-    loop.run_until_complete(app.run_polling())
-
 if __name__ == "__main__":
-    import threading
-    import time
-    
-    # Initialize database if not exists
-    if not os.path.exists(DATABASE_PATH):
-        with open(DATABASE_PATH, "w") as f:
-            json.dump({"keys": {}, "premium_users": {}}, f)
+    import asyncio
+    from threading import Thread
 
-    # Start the bot in a separate thread
-    bot_thread = threading.Thread(target=run_bot)
-    bot_thread.daemon = True
-    bot_thread.start()
+    async def main():
+        app = (
+            ApplicationBuilder()
+            .token(TOKEN)
+            .post_init(post_init)
+            .build()
+        )
 
-    # Run Flask app on the specified port
-    flask_app.run(host='0.0.0.0', port=PORT)
+        # Conversation handler
+        conv_handler = ConversationHandler(
+            entry_points=[
+                CommandHandler("newresume", new_resume),
+                CallbackQueryHandler(new_resume, pattern="^new_resume$"),
+            ],
+            states={
+                NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
+                CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_contact)],
+                EDUCATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_education)],
+                EXPERIENCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_experience)],
+                SKILLS: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_skills)],
+                SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
+            },
+            fallbacks=[CommandHandler("cancel", cancel)],
+            per_message=False,
+        )
+
+        # Add handlers
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(CommandHandler("premium", premium_command))
+        app.add_handler(CommandHandler("help", help_command))
+        app.add_handler(CommandHandler("privacy", show_privacy_policy))
+        app.add_handler(CommandHandler("generatekey", generate_key))
+        app.add_handler(CommandHandler("redeem", redeem_key))
+        app.add_handler(conv_handler)
+        app.add_handler(CallbackQueryHandler(button_handler))
+        app.add_error_handler(error_handler)
+
+        # Start Flask in a separate thread
+        def run_flask():
+            flask_app.run(host="0.0.0.0", port=PORT)
+
+        flask_thread = Thread(target=run_flask)
+        flask_thread.start()
+
+        print("Starting bot polling...")
+        await app.run_polling()
+
+    asyncio.run(main())
