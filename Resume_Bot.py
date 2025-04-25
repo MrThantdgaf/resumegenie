@@ -1,19 +1,11 @@
-import os
-import json
-import uuid
-import io
-import logging
-import asyncio
-from datetime import datetime, timedelta
-from fpdf import FPDF
-
 from telegram import (
     Update,
+    ReplyKeyboardMarkup,
     ReplyKeyboardRemove,
     InlineKeyboardMarkup,
     InlineKeyboardButton,
     MenuButtonCommands,
-    BotCommand
+    BotCommand,
 )
 from telegram.ext import (
     ApplicationBuilder,
@@ -22,23 +14,22 @@ from telegram.ext import (
     MessageHandler,
     ConversationHandler,
     filters,
-    CallbackQueryHandler
+    CallbackQueryHandler,
 )
 
-# Configure logging
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
 
-# Global dictionary to store user data during conversation
+from fpdf import FPDF
+import os, json, uuid, io
+from datetime import datetime, timedelta
+
+# Global dictionary to store user data during the conversation
 user_data = {}
 
-# Conversation states
-NAME, CONTACT, EDUCATION, EXPERIENCE, SKILLS, SUMMARY = range(6)
 
-# Template styles
+# Define states for conversation as simple integers
+NAME, CONTACT, EDUCATION, EXPERIENCE, SKILLS, SUMMARY, TEMPLATE = range(7)
+
+# Template styles with emoji icons
 TEMPLATES = {
     "BASIC": "📄 Basic (Free)",
     "MODERN": "💎 Modern (Premium)",
@@ -46,22 +37,22 @@ TEMPLATES = {
     "MINIMALIST": "✂️ Minimalist (Premium)",
 }
 
-# Environment variables
+# Fetch TOKEN and ADMIN_ID from environment variables
 TOKEN = os.getenv("TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
-DATABASE_PATH = "premium_data.json"
+DATABASE_PATH = "/etc/secrets/premium_data.json"
 
 if not TOKEN:
-    raise RuntimeError("Telegram bot TOKEN is missing")
-if not ADMIN_ID:
-    raise RuntimeError("ADMIN_ID is missing")
+    raise RuntimeError("Telegram bot TOKEN is missing. Please set it as an environment variable.")
 
-# Database functions
+if not ADMIN_ID:
+    raise RuntimeError("ADMIN_ID is missing. Please set it as an environment variable.")
+
 def load_db():
     if not os.path.exists(DATABASE_PATH):
         with open(DATABASE_PATH, "w") as f:
             json.dump({"keys": {}, "premium_users": {}}, f)
-    
+
     try:
         with open(DATABASE_PATH, "r") as f:
             return json.load(f)
@@ -79,6 +70,11 @@ def save_db(data):
     with open(DATABASE_PATH, "w") as f:
         json.dump(clean_data, f, indent=2)
 
+# Ensure the database file is initialized
+if not os.path.exists(DATABASE_PATH):
+    with open(DATABASE_PATH, "w") as f:
+        json.dump({"keys": {}, "premium_users": {}}, f)
+
 def is_premium(user_id):
     if not user_id:
         return False
@@ -95,160 +91,27 @@ def is_premium(user_id):
             return False
     return False
 
-# PDF Generation
-def generate_pdf_bytes(data):
-    class PDF(FPDF):
-        def header(self):
-            pass
-        def footer(self):
-            pass
 
-    pdf = PDF()
-    pdf.add_page()
-    template = data.get("template", "BASIC")
-    user_id = data.get("user_id")
-
-    if template != "BASIC" and not is_premium(user_id):
-        template = "BASIC"
-
-    if template == "BASIC":
-        # Basic template implementation
-        pdf.set_font("Arial", "B", 20)
-        pdf.set_text_color(50, 50, 50)
-        pdf.cell(0, 14, data["name"], 0, 1, "C")
-
-        pdf.set_font("Arial", "", 10)
-        contact_parts = [part.strip() for part in data["contact"].split("|")]
-        contact_line = " | ".join(contact_parts)
-        pdf.cell(0, 8, contact_line, 0, 1, "C")
-
-        pdf.set_draw_color(160, 160, 160)
-        pdf.set_line_width(0.4)
-        pdf.line(15, pdf.get_y() + 4, 195, pdf.get_y() + 4)
-        pdf.ln(12)
-
-        sections = [
-            ("PROFESSIONAL SUMMARY", data["summary"]),
-            ("EDUCATION", data["education"]),
-            ("WORK EXPERIENCE", data["experience"]),
-            ("SKILLS", data["skills"]),
-        ]
-
-        for title, content in sections:
-            pdf.set_font("Arial", "B", 14)
-            pdf.set_text_color(70, 70, 70)
-            pdf.cell(0, 8, title, 0, 1)
-            pdf.set_draw_color(200, 200, 200)
-            pdf.line(15, pdf.get_y() + 1, 195, pdf.get_y() + 1)
-            pdf.ln(5)
-            pdf.set_font("Arial", "", 11)
-            pdf.set_text_color(30, 30, 30)
-            pdf.multi_cell(0, 7, content)
-            pdf.ln(8)
-
-    elif template == "MODERN":
-        # Modern template implementation
-        pdf.set_fill_color(0, 102, 204)
-        pdf.set_text_color(255, 255, 255)
-        pdf.set_font("Arial", "B", 22)
-        pdf.cell(0, 14, data["name"], 0, 1, "C", True)
-
-        pdf.set_font("Arial", "", 10)
-        pdf.set_text_color(50, 50, 50)
-        pdf.ln(5)
-        contact_line = " | ".join([part.strip() for part in data["contact"].split("|")])
-        pdf.cell(0, 8, contact_line, 0, 1, "C")
-        pdf.ln(5)
-
-        sections = [
-            ("Summary", data["summary"]),
-            ("Education", data["education"]),
-            ("Experience", data["experience"]),
-            ("Skills", data["skills"]),
-        ]
-
-        for title, content in sections:
-            pdf.set_font("Arial", "B", 12)
-            pdf.set_fill_color(230, 240, 255)
-            pdf.set_text_color(0, 102, 204)
-            pdf.cell(0, 8, f"  {title.upper()}", 0, 1, "L", True)
-            pdf.set_font("Arial", "", 10)
-            pdf.set_text_color(30, 30, 30)
-            pdf.multi_cell(0, 6, content)
-            pdf.ln(5)
-
-    elif template == "CREATIVE":
-        pdf.set_font("Arial", "B", 20)
-        pdf.set_text_color(153, 0, 76)
-        pdf.cell(0, 14, data["name"], 0, 1, "C")
-
-        pdf.set_font("Arial", "I", 10)
-        pdf.set_text_color(100, 100, 100)
-        contact_line = " | ".join([part.strip() for part in data["contact"].split("|")])
-        pdf.cell(0, 8, contact_line, 0, 1, "C")
-        pdf.ln(5)
-
-        sections = [
-            ("About Me", data["summary"]),
-            ("Learning Journey", data["education"]),
-            ("Career Path", data["experience"]),
-            ("Core Skills", data["skills"]),
-        ]
-
-        for title, content in sections:
-            pdf.set_font("Arial", "B", 13)
-            pdf.set_fill_color(255, 230, 240)
-            pdf.set_text_color(204, 0, 102)
-            pdf.cell(0, 8, f"  {title}", 0, 1, "L", True)
-            pdf.set_font("Arial", "", 10)
-            pdf.set_text_color(40, 40, 40)
-            pdf.multi_cell(0, 6, content)
-            pdf.ln(5)
-
-    elif template == "MINIMALIST":
-        pdf.set_font("Arial", "B", 18)
-        pdf.set_text_color(30, 30, 30)
-        pdf.cell(0, 12, data["name"], 0, 1, "C")
-
-        pdf.set_font("Arial", "", 9)
-        pdf.set_text_color(80, 80, 80)
-        contact_line = " | ".join([part.strip() for part in data["contact"].split("|")])
-        pdf.cell(0, 6, contact_line, 0, 1, "C")
-        pdf.ln(6)
-
-        sections = [
-            ("Summary", data["summary"]),
-            ("Education", data["education"]),
-            ("Experience", data["experience"]),
-            ("Skills", data["skills"]),
-        ]
-
-        for title, content in sections:
-            pdf.set_font("Arial", "B", 11)
-            pdf.set_fill_color(245, 245, 245)
-            pdf.set_text_color(60, 60, 60)
-            pdf.cell(0, 8, f"  {title}", 0, 1, "L", True)
-            pdf.set_font("Arial", "", 10)
-            pdf.set_text_color(50, 50, 50)
-            pdf.multi_cell(0, 6, content)
-            pdf.ln(4)
+async def post_init(application):
+    commands = [
+        BotCommand("start", "Start the bot"),
+        BotCommand("newresume", "Create a new resume"),
+        BotCommand("premium", "Premium features info"),
+        BotCommand("redeem", "Redeem premium key"),
+        BotCommand("help", "Get help"),
+        BotCommand("privacy", "View privacy policy"),  # New command
+        BotCommand("cancel", "Cancel current operation"),
+    ]
+    await application.bot.set_my_commands(commands)
+    await application.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
 
 
-    if not is_premium(user_id):
-        pdf.set_font("Arial", "I", 8)
-        pdf.set_text_color(200, 200, 200)
-        pdf.set_y(-10)
-        pdf.cell(0, 10, "Created with ResumeGenie", 0, 0, "R")
-
-    return pdf.output(dest="S").encode("latin1")
-
-# Handler functions
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("✨ Create New Resume", callback_data="new_resume")],
         [InlineKeyboardButton("💎 Premium Features", callback_data="premium_features")],
         [InlineKeyboardButton("ℹ️ Help", callback_data="show_help")],
-        [InlineKeyboardButton("🔒 Privacy Policy", callback_data="privacy_policy")],
+        [InlineKeyboardButton("🔒 Privacy Policy", callback_data="privacy_policy")],  # New button
     ]
 
     user = update.effective_user
@@ -279,10 +142,114 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown",
         )
 
+async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await show_premium_features(update, context)
+
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await show_help(update, context)
+
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    handlers = {
+        "new_resume": new_resume,
+        "premium_features": show_premium_features,
+        "show_help": show_help,
+        "back_to_main": start,
+        "get_premium": get_premium,
+        "privacy_policy": show_privacy_policy,  # New handler
+    }
+
+    if query.data in handlers:
+        await handlers[query.data](update, context)
+    elif query.data.startswith("template_"):
+        template = query.data.split("_")[1]
+        user_id = query.from_user.id
+        if user_id not in user_data:
+            user_data[user_id] = {}
+        user_data[user_id]["template"] = template
+        user_data[user_id]["user_id"] = user_id
+        await query.edit_message_text(
+            f"✅ Selected template: *{TEMPLATES[template]}*", parse_mode="Markdown"
+        )
+        await generate_resume(update, context)
+
+
+async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    help_text = """
+📝 *ResumeGenie Pro Help Guide* 📝
+
+✨ *Getting Started*
+- Use /start to see main menu
+- Click "Create New Resume" to begin
+- Follow the step-by-step process
+
+💎 *Premium Features*
+- Access premium templates
+- Unlimited resume saves
+- Priority support
+
+🔑 *Premium Activation*
+- Contact db for premium keys
+- Use /redeem <key> to activate
+
+🛠 *Commands*
+/start - Show main menu
+/newresume - Start new resume
+/redeem - Activate premium
+/cancel - Cancel current operation
+
+Need more help? Contact @techdb009
+"""
+
+    keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="back_to_main")]]
+
+    query = update.callback_query
+    await query.edit_message_text(
+        help_text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+async def show_privacy_policy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    privacy_policy_url = "https://mrthantdgaf.github.io/resumegenie/privacy_policy.html"  # Replace with your actual URL
+    
+    keyboard = [
+        [InlineKeyboardButton("⬅️ Back", callback_data="back_to_main")],
+    ]
+    
+    message = (
+        "🔒 *Privacy Policy*\n\n"
+        "We take your privacy seriously. Please read our privacy policy at:\n"
+        f"[Privacy Policy Page]({privacy_policy_url})\n\n"
+        "Key points:\n"
+        "- We don't store your personal data\n"
+        "- Your resume information is processed temporarily\n"
+        "- No data sharing with third parties"
+    )
+    
+    if query:
+        await query.edit_message_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown",
+            disable_web_page_preview=True
+        )
+    else:
+        await update.message.reply_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown",
+            disable_web_page_preview=True
+        )
+        
 async def new_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query if update.callback_query else None
     user_id = update.effective_user.id
 
+    # Initialize user data
     user_data[user_id] = {
         "name": "",
         "contact": "",
@@ -297,7 +264,7 @@ async def new_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = (
         "📝 *Let's Create Your Professional Resume!*\n\n"
         "We'll go through a few simple steps to build your perfect resume.\n\n"
-        "🔹 *Step 1 of 6*\n"
+        "🔹 *Step 1 of 7*\n"
         "What's your *full name*?\n\n"
         "Example: *John Doe*"
     )
@@ -309,6 +276,7 @@ async def new_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message, parse_mode="Markdown", reply_markup=ReplyKeyboardRemove()
         )
     return NAME
+
 
 async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -471,6 +439,8 @@ async def get_summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown",
         )
         return await generate_resume(update, context)
+
+
 async def generate_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.callback_query:
         query = update.callback_query
@@ -506,6 +476,155 @@ async def generate_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
         del user_data[user_id]
 
     return ConversationHandler.END
+
+
+def generate_pdf_bytes(data):
+    from fpdf import FPDF
+
+    class PDF(FPDF):
+        def header(self):
+            pass
+
+        def footer(self):
+            pass
+
+    pdf = PDF()
+    pdf.add_page()
+
+    template = data.get("template", "BASIC")
+    user_id = data.get("user_id")
+
+    if template != "BASIC" and not is_premium(user_id):
+        template = "BASIC"
+
+    if template == "BASIC":
+        pdf.set_font("Arial", "B", 20)
+        pdf.set_text_color(50, 50, 50)
+        pdf.cell(0, 14, data["name"], 0, 1, "C")
+
+        pdf.set_font("Arial", "", 10)
+        contact_parts = [part.strip() for part in data["contact"].split("|")]
+        contact_line = " | ".join(contact_parts)
+        pdf.cell(0, 8, contact_line, 0, 1, "C")
+
+        pdf.set_draw_color(160, 160, 160)
+        pdf.set_line_width(0.4)
+        pdf.line(15, pdf.get_y() + 4, 195, pdf.get_y() + 4)
+        pdf.ln(12)
+
+        sections = [
+            ("PROFESSIONAL SUMMARY", data["summary"]),
+            ("EDUCATION", data["education"]),
+            ("WORK EXPERIENCE", data["experience"]),
+            ("SKILLS", data["skills"]),
+        ]
+
+        for title, content in sections:
+            pdf.set_font("Arial", "B", 14)
+            pdf.set_text_color(70, 70, 70)
+            pdf.cell(0, 8, title, 0, 1)
+            pdf.set_draw_color(200, 200, 200)
+            pdf.line(15, pdf.get_y() + 1, 195, pdf.get_y() + 1)
+            pdf.ln(5)
+            pdf.set_font("Arial", "", 11)
+            pdf.set_text_color(30, 30, 30)
+            pdf.multi_cell(0, 7, content)
+            pdf.ln(8)
+
+    elif template == "MODERN":
+        pdf.set_fill_color(0, 102, 204)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Arial", "B", 22)
+        pdf.cell(0, 14, data["name"], 0, 1, "C", True)
+
+        pdf.set_font("Arial", "", 10)
+        pdf.set_text_color(50, 50, 50)
+        pdf.ln(5)
+        contact_line = " | ".join([part.strip() for part in data["contact"].split("|")])
+        pdf.cell(0, 8, contact_line, 0, 1, "C")
+        pdf.ln(5)
+
+        sections = [
+            ("Summary", data["summary"]),
+            ("Education", data["education"]),
+            ("Experience", data["experience"]),
+            ("Skills", data["skills"]),
+        ]
+
+        for title, content in sections:
+            pdf.set_font("Arial", "B", 12)
+            pdf.set_fill_color(230, 240, 255)
+            pdf.set_text_color(0, 102, 204)
+            pdf.cell(0, 8, f"  {title.upper()}", 0, 1, "L", True)
+            pdf.set_font("Arial", "", 10)
+            pdf.set_text_color(30, 30, 30)
+            pdf.multi_cell(0, 6, content)
+            pdf.ln(5)
+
+    elif template == "CREATIVE":
+        pdf.set_font("Arial", "B", 20)
+        pdf.set_text_color(153, 0, 76)
+        pdf.cell(0, 14, data["name"], 0, 1, "C")
+
+        pdf.set_font("Arial", "I", 10)
+        pdf.set_text_color(100, 100, 100)
+        contact_line = " | ".join([part.strip() for part in data["contact"].split("|")])
+        pdf.cell(0, 8, contact_line, 0, 1, "C")
+        pdf.ln(5)
+
+        sections = [
+            ("About Me", data["summary"]),
+            ("Learning Journey", data["education"]),
+            ("Career Path", data["experience"]),
+            ("Core Skills", data["skills"]),
+        ]
+
+        for title, content in sections:
+            pdf.set_font("Arial", "B", 13)
+            pdf.set_fill_color(255, 230, 240)
+            pdf.set_text_color(204, 0, 102)
+            pdf.cell(0, 8, f"  {title}", 0, 1, "L", True)
+            pdf.set_font("Arial", "", 10)
+            pdf.set_text_color(40, 40, 40)
+            pdf.multi_cell(0, 6, content)
+            pdf.ln(5)
+
+    elif template == "MINIMALIST":
+        pdf.set_font("Arial", "B", 18)
+        pdf.set_text_color(30, 30, 30)
+        pdf.cell(0, 12, data["name"], 0, 1, "C")
+
+        pdf.set_font("Arial", "", 9)
+        pdf.set_text_color(80, 80, 80)
+        contact_line = " | ".join([part.strip() for part in data["contact"].split("|")])
+        pdf.cell(0, 6, contact_line, 0, 1, "C")
+        pdf.ln(6)
+
+        sections = [
+            ("Summary", data["summary"]),
+            ("Education", data["education"]),
+            ("Experience", data["experience"]),
+            ("Skills", data["skills"]),
+        ]
+
+        for title, content in sections:
+            pdf.set_font("Arial", "B", 11)
+            pdf.set_fill_color(245, 245, 245)
+            pdf.set_text_color(60, 60, 60)
+            pdf.cell(0, 8, f"  {title}", 0, 1, "L", True)
+            pdf.set_font("Arial", "", 10)
+            pdf.set_text_color(50, 50, 50)
+            pdf.multi_cell(0, 6, content)
+            pdf.ln(4)
+
+    if not is_premium(user_id):
+        pdf.set_font("Arial", "I", 8)
+        pdf.set_text_color(200, 200, 200)
+        pdf.set_y(-10)
+        pdf.cell(0, 10, "Created with ResumeGenie", 0, 0, "R")
+
+    return pdf.output(dest="S").encode("latin1")
+
 
 async def show_premium_features(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -756,216 +875,63 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif update.message:
         await update.message.reply_text("❌ An error occurred. Please try again.")
 
-def create_conversation_handler():
-    """Create and return the conversation handler for resume creation"""
-    return ConversationHandler(
-        entry_points=[
-            CommandHandler("newresume", new_resume),
-            CallbackQueryHandler(new_resume, pattern="^new_resume$"),
-        ],
-        states={
-            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
-            CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_contact)],
-            EDUCATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_education)],
-            EXPERIENCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_experience)],
-            SKILLS: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_skills)],
-            SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-        per_user=True,
-        per_chat=True
-    )
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    handlers = {
-        "new_resume": new_resume,
-        "premium_features": show_premium_features,
-        "show_help": show_help,
-        "back_to_main": start,
-        "get_premium": get_premium,
-        "privacy_policy": show_privacy_policy,  # New handler
-    }
-
-    if query.data in handlers:
-        await handlers[query.data](update, context)
-    elif query.data.startswith("template_"):
-        template = query.data.split("_")[1]
-        user_id = query.from_user.id
-        if user_id not in user_data:
-            user_data[user_id] = {}
-        user_data[user_id]["template"] = template
-        user_data[user_id]["user_id"] = user_id
-        await query.edit_message_text(
-            f"✅ Selected template: *{TEMPLATES[template]}*", parse_mode="Markdown"
-        )
-        await generate_resume(update, context)
-        
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await show_help(update, context)
-async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    help_text = """
-📝 *ResumeGenie Pro Help Guide* 📝
-
-✨ *Getting Started*
-- Use /start to see main menu
-- Click "Create New Resume" to begin
-- Follow the step-by-step process
-
-💎 *Premium Features*
-- Access premium templates
-- Unlimited resume saves
-- Priority support
-
-🔑 *Premium Activation*
-- Contact db for premium keys
-- Use /redeem <key> to activate
-
-🛠 *Commands*
-/start - Show main menu
-/newresume - Start new resume
-/redeem - Activate premium
-/cancel - Cancel current operation
-
-Need more help? Contact @techdb009
-"""
-
-    keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="back_to_main")]]
-
-    query = update.callback_query
-    await query.edit_message_text(
-        help_text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-async def show_privacy_policy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    privacy_policy_url = "https://mrthantdgaf.github.io/resumegenie/privacy_policy.html"  # Replace with your actual URL
-    
-    keyboard = [
-        [InlineKeyboardButton("⬅️ Back", callback_data="back_to_main")],
-    ]
-    
-    message = (
-        "🔒 *Privacy Policy*\n\n"
-        "We take your privacy seriously. Please read our privacy policy at:\n"
-        f"[Privacy Policy Page]({privacy_policy_url})\n\n"
-        "Key points:\n"
-        "- We don't store your personal data\n"
-        "- Your resume information is processed temporarily\n"
-        "- No data sharing with third parties"
-    )
-    
-    if query:
-        await query.edit_message_text(
-            message,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown",
-            disable_web_page_preview=True
-        )
-    else:
-        await update.message.reply_text(
-            message,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown",
-            disable_web_page_preview=True
-        )
-        
-async def post_init(application):
-    """Post initialization - set up bot commands"""
-    logger.info("Initializing bot commands...")
-    commands = [
-        BotCommand("start", "Start the bot"),
-        BotCommand("newresume", "Create a new resume"),
-        BotCommand("premium", "Premium features info"),
-        BotCommand("redeem", "Redeem premium key"),
-        BotCommand("help", "Get help"),
-        BotCommand("privacy", "View privacy policy"),
-        BotCommand("cancel", "Cancel current operation"),
-    ]
-    await application.bot.set_my_commands(commands)
-    await application.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
-    logger.info("Bot commands initialized")
-
-def create_conversation_handler():
-    """Create and return the conversation handler for resume creation"""
-    return ConversationHandler(
-        entry_points=[
-            CommandHandler("newresume", new_resume),
-            CallbackQueryHandler(new_resume, pattern="^new_resume$"),
-        ],
-        states={
-            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
-            CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_contact)],
-            EDUCATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_education)],
-            EXPERIENCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_experience)],
-            SKILLS: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_skills)],
-            SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-        per_message=False,  # Changed to True to properly track CallbackQueryHandler
-        per_user=True
-    )
-
-def setup_application_handlers(application):
-    """Set up all handlers for the application"""
-    logger.info("Setting up application handlers...")
-    
-    # Add conversation handler
-    application.add_handler(create_conversation_handler())
-    
-    # Add command handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("premium", show_premium_features))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("privacy", show_privacy_policy))
-    application.add_handler(CommandHandler("generatekey", generate_key))
-    application.add_handler(CommandHandler("redeem", redeem_key))
-    
-    # Add callback query handler
-    application.add_handler(CallbackQueryHandler(button_handler))
-    
-    # Add error handler
-    application.add_error_handler(error_handler)
-    
-    logger.info("Application handlers setup complete")
-
-async def run_application():
-    """Run the bot using webhooks (for Render Web Service)"""
-    if not os.path.exists(DATABASE_PATH):
-        with open(DATABASE_PATH, "w") as f:
-            json.dump({"keys": {}, "premium_users": {}}, f)
-
-    logger.info("Creating application instance...")
-    application = (
+def main():
+    # Initialize the bot application
+    app = (
         ApplicationBuilder()
         .token(TOKEN)
         .post_init(post_init)
         .build()
     )
 
-    setup_application_handlers(application)
-
-    logger.info("Starting bot with webhook...")
-
-    # Get Render's provided port
-    port = int(os.environ.get("PORT", 8443))
-
-    # Get the external URL of your bot (update this to your real domain)
-    webhook_url = os.environ.get("WEBHOOK_URL")  # You must set this in Render env vars
-
-    await application.run_webhook(
-        listen="0.0.0.0",
-        port=port,
-        url_path="",  # Or "webhook" if you want a path
-        webhook_url=webhook_url,
+    # Conversation handler
+    conv_handler = ConversationHandler(
+        entry_points=[
+            CommandHandler("newresume", new_resume),
+            CallbackQueryHandler(new_resume, pattern="^new_resume$"),
+        ],
+        states={
+            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
+            CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_contact)],
+            EDUCATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_education)],
+            EXPERIENCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_experience)],
+            SKILLS: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_skills)],
+            SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+        per_message=False,
     )
 
-def main():
-    try:
-        asyncio.run(run_application())
-    except KeyboardInterrupt:
-        logger.info("Bot shutdown by user")
-    except Exception as e:
-        logger.error(f"Fatal error: {e}")
+    # Add handlers
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("premium", premium_command))
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("privacy", show_privacy_policy))  # Updated handler
+    app.add_handler(CommandHandler("generatekey", generate_key))
+    app.add_handler(CommandHandler("redeem", redeem_key))
+    app.add_handler(conv_handler)
+    app.add_handler(CallbackQueryHandler(button_handler))
 
+    # Error handler
+    app.add_error_handler(error_handler)
+
+    print("Bot is running as background worker...")
+    
+    # Run the bot with automatic restart on failure
+    while True:
+        try:
+            app.run_polling()
+        except Exception as e:
+            print(f"Bot crashed with error: {e}")
+            print("Restarting in 5 seconds...")
+            time.sleep(5)
+
+if __name__ == "__main__":
+    import time  # Add this import at the top of your file
+    
+    # Initialize database if not exists
+    if not os.path.exists(DATABASE_PATH):
+        with open(DATABASE_PATH, "w") as f:
+            json.dump({"keys": {}, "premium_users": {}}, f)
+
+    main()
