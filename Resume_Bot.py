@@ -961,9 +961,16 @@ async def main():
     await run_bot()
 
 if __name__ == "__main__":
+    import nest_asyncio
+    nest_asyncio.apply()
+
+    loop = asyncio.get_event_loop()
+
+    # Avoid Gunicorn in-thread; just run Flask directly for now
+    flask_thread = Thread(target=lambda: flask_app.run(host="0.0.0.0", port=PORT))
+    flask_thread.start()
+
     try:
-        asyncio.run(main())
+        loop.run_until_complete(run_bot())
     except KeyboardInterrupt:
         print("Bot stopped by user")
-    except Exception as e:
-        print(f"Bot stopped with error: {e}")
