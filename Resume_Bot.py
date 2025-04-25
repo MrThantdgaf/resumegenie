@@ -17,7 +17,8 @@ from telegram.ext import (
     CallbackQueryHandler,
 )
 
-
+from aiohttp import web
+import asyncio
 from fpdf import FPDF
 import os, json, uuid, io
 from datetime import datetime, timedelta
@@ -875,16 +876,58 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif update.message:
         await update.message.reply_text("❌ An error occurred. Please try again.")
 
-def main():
-    # Initialize the bot application
-    app = (
-        ApplicationBuilder()
-        .token(TOKEN)
-        .post_init(post_init)
-        .build()
-    )
+async def health_check(request):
+    """Simple health check endpoint for Render"""
+    return web.Response(text="🤖 Telegram Bot is running")
 
-    # Conversation handler
+async def start_web_server():
+    """Start a minimal HTTP server (required for Render)"""
+    app = web.Application()
+    app.router.add_get("/", health_check)
+    
+    # Get PORT from Render (default: 8080 if running locally)
+    PORT = int(os.getenv("PORT", 8080))
+    
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", PORT)
+    await site.start()
+    print(f"✅ HTTP server running on port {PORT}")
+
+# Add these new imports at the top
+from aiohttp import web
+import asyncio
+
+# ... (keep all your existing imports and code until the main() function) ...
+
+async def health_check(request):
+    """Simple health check endpoint for Render"""
+    return web.Response(text="🤖 Telegram Bot is running")
+
+async def start_web_server():
+    """Start a minimal HTTP server (required for Render)"""
+    app = web.Application()
+    app.router.add_get("/", health_check)
+    
+    # Get PORT from Render (default: 8080 if running locally)
+    PORT = int(os.getenv("PORT", 8080))
+    
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", PORT)
+    await site.start()
+    print(f"✅ HTTP server running on port {PORT}")
+
+async def main():
+    """Start both the web server and the Telegram bot"""
+    # Start the web server first (required for Render)
+    await start_web_server()
+    
+    # Then start the Telegram bot
+    print("🤖 Starting Telegram bot...")
+    app = ApplicationBuilder().token(TOKEN).post_init(post_init).build()
+    
+    # Add all your handlers (keep your existing handler setup code)
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("newresume", new_resume),
@@ -901,37 +944,25 @@ def main():
         fallbacks=[CommandHandler("cancel", cancel)],
         per_message=False,
     )
-
-    # Add handlers
+    
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("premium", premium_command))
     app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("privacy", show_privacy_policy))  # Updated handler
+    app.add_handler(CommandHandler("privacy", show_privacy_policy))
     app.add_handler(CommandHandler("generatekey", generate_key))
     app.add_handler(CommandHandler("redeem", redeem_key))
     app.add_handler(conv_handler)
     app.add_handler(CallbackQueryHandler(button_handler))
-
-    # Error handler
     app.add_error_handler(error_handler)
-
-    print("Bot is running as background worker...")
     
-    # Run the bot with automatic restart on failure
-    while True:
-        try:
-            app.run_polling()
-        except Exception as e:
-            print(f"Bot crashed with error: {e}")
-            print("Restarting in 5 seconds...")
-            time.sleep(5)
+    # Start polling
+    await app.run_polling()
 
 if __name__ == "__main__":
-    import time  # Add this import at the top of your file
-    
     # Initialize database if not exists
     if not os.path.exists(DATABASE_PATH):
         with open(DATABASE_PATH, "w") as f:
             json.dump({"keys": {}, "premium_users": {}}, f)
-
-    main()
+    
+    # Run the main async function
+    asyncio.run(main())
