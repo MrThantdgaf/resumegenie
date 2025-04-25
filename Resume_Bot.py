@@ -885,16 +885,11 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif update.message:
         await update.message.reply_text("❌ An error occurred. Please try again.")
 
+
 def run_flask():
     flask_app.run(host="0.0.0.0", port=PORT)
 
-
-async def run_bot_and_flask():
-    # Run Flask in background thread
-    flask_thread = Thread(target=run_flask)
-    flask_thread.start()
-
-    # Build and run Telegram bot
+async def start_bot():
     app = (
         ApplicationBuilder()
         .token(TOKEN)
@@ -929,10 +924,16 @@ async def run_bot_and_flask():
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_error_handler(error_handler)
 
-    print("✅ Bot is starting...")
+    print("✅ Telegram bot is running...")
     await app.run_polling(close_loop=False)
 
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.create_task(run_bot_and_flask())
-    loop.run_forever()
+    flask_thread = Thread(target=run_flask)
+    flask_thread.start()
+
+    try:
+        loop = asyncio.get_event_loop()
+        loop.create_task(start_bot())
+        loop.run_forever()
+    except RuntimeError as e:
+        print("❌ Failed to start event loop:", e)
