@@ -887,8 +887,27 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ An error occurred. Please try again.")
 
 def run_flask():
-    """Run Flask in a separate thread"""
-    flask_app.run(host="0.0.0.0", port=PORT, use_reloader=False, threaded=True)
+    from gunicorn.app.base import BaseApplication
+    
+    class FlaskApplication(BaseApplication):
+        def __init__(self, app, options=None):
+            self.application = app
+            self.options = options or {}
+            super().__init__()
+
+        def load_config(self):
+            for key, value in self.options.items():
+                self.cfg.set(key.lower(), value)
+
+        def load(self):
+            return self.application
+
+    options = {
+        'bind': f'0.0.0.0:{PORT}',
+        'workers': 4,
+        'threads': 2,
+    }
+    FlaskApplication(flask_app, options).run()
 
 async def run_bot():
     """Run the Telegram bot"""
