@@ -16,15 +16,16 @@ from telegram.ext import (
     filters,
     CallbackQueryHandler,
 )
-
-
 from fpdf import FPDF
 import os, json, uuid, io
 from datetime import datetime, timedelta
+from flask import Flask, request, jsonify
+
+# Initialize Flask app
+flask_app = Flask(__name__)
 
 # Global dictionary to store user data during the conversation
 user_data = {}
-
 
 # Define states for conversation as simple integers
 NAME, CONTACT, EDUCATION, EXPERIENCE, SKILLS, SUMMARY, TEMPLATE = range(7)
@@ -37,9 +38,10 @@ TEMPLATES = {
     "MINIMALIST": "✂️ Minimalist (Premium)",
 }
 
-# Fetch TOKEN and ADMIN_ID from environment variables
+# Fetch environment variables
 TOKEN = os.getenv("TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
+PORT = int(os.getenv("PORT", 10000))  # Default to 10000 if not set
 DATABASE_PATH = "/etc/secrets/premium_data.json"
 
 if not TOKEN:
@@ -47,6 +49,11 @@ if not TOKEN:
 
 if not ADMIN_ID:
     raise RuntimeError("ADMIN_ID is missing. Please set it as an environment variable.")
+
+# Add Flask route for health check
+@flask_app.route('/')
+def health_check():
+    return jsonify({"status": "ok", "message": "ResumeGenie bot is running", "port": PORT})
 
 def load_db():
     if not os.path.exists(DATABASE_PATH):
@@ -875,7 +882,8 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif update.message:
         await update.message.reply_text("❌ An error occurred. Please try again.")
 
-def main():
+def run_bot():
+    """Function to run the Telegram bot in the background"""
     # Initialize the bot application
     app = (
         ApplicationBuilder()
@@ -906,7 +914,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("premium", premium_command))
     app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("privacy", show_privacy_policy))  # Updated handler
+    app.add_handler(CommandHandler("privacy", show_privacy_policy))
     app.add_handler(CommandHandler("generatekey", generate_key))
     app.add_handler(CommandHandler("redeem", redeem_key))
     app.add_handler(conv_handler)
@@ -917,21 +925,22 @@ def main():
 
     print("Bot is running as background worker...")
     
-    # Run the bot with automatic restart on failure
-    while True:
-        try:
-            app.run_polling()
-        except Exception as e:
-            print(f"Bot crashed with error: {e}")
-            print("Restarting in 5 seconds...")
-            time.sleep(5)
+    # Run the bot
+    app.run_polling()
 
 if __name__ == "__main__":
-    import time  # Add this import at the top of your file
+    import threading
+    import time
     
     # Initialize database if not exists
     if not os.path.exists(DATABASE_PATH):
         with open(DATABASE_PATH, "w") as f:
             json.dump({"keys": {}, "premium_users": {}}, f)
 
-    main()
+    # Start the bot in a separate thread
+    bot_thread = threading.Thread(target=run_bot)
+    bot_thread.daemon = True
+    bot_thread.start()
+
+    # Run Flask app on the specified port
+    flask_app.run(host='0.0.0.0', port=PORT)
