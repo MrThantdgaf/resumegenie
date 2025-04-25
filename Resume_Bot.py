@@ -3,6 +3,7 @@ import json
 import uuid
 import io
 import logging
+import asyncio
 from datetime import datetime, timedelta
 from fpdf import FPDF
 
@@ -902,7 +903,7 @@ def create_conversation_handler():
             SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
-        per_chat=True,
+        per_message=True,  # Changed to True to properly track CallbackQueryHandler
         per_user=True
     )
 
@@ -915,7 +916,7 @@ def setup_application_handlers(application):
     
     # Add command handlers
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("premium", show_premium_features))
+    application.add_handler(CommandHandler("premium", premium_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("privacy", show_privacy_policy))
     application.add_handler(CommandHandler("generatekey", generate_key))
@@ -947,19 +948,32 @@ async def run_bot():
         setup_application_handlers(application)
         
         logger.info("Starting bot polling...")
-        await application.run_polling()
+        await application.run_polling(drop_pending_updates=True)
         
+    except asyncio.CancelledError:
+        logger.info("Bot shutdown requested...")
     except Exception as e:
         logger.error(f"Bot crashed with error: {e}")
         raise
 
 def main():
-    """Main entry point that handles event loop creation"""
+    """Main entry point that properly handles event loop"""
     try:
-        import asyncio
-        asyncio.run(run_bot())
+        # Enable tracemalloc for better debugging
+        import tracemalloc
+        tracemalloc.start()
+        
+        # Create and run event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        try:
+            loop.run_until_complete(run_bot())
+        finally:
+            if not loop.is_closed():
+                loop.close()
     except KeyboardInterrupt:
-        logger.info("Bot shutdown requested...")
+        logger.info("Bot shutdown by user")
     except Exception as e:
         logger.error(f"Fatal error: {e}")
 
