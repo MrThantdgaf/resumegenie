@@ -22,6 +22,8 @@ import asyncio
 from fpdf import FPDF
 import os, json, uuid, io
 from datetime import datetime, timedelta
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from concurrent.futures import ThreadPoolExecutor
 
 # Global dictionary to store user data during the conversation
 user_data = {}
@@ -876,46 +878,20 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif update.message:
         await update.message.reply_text("❌ An error occurred. Please try again.")
 
-async def health_check(request):
-    """Simple health check endpoint for Render"""
-    return web.Response(text="🤖 Telegram Bot is running")
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(b"Bot is running")
 
-async def start_web_server():
-    """Start a minimal HTTP server (required for Render)"""
-    app = web.Application()
-    app.router.add_get("/", health_check)
-    
-    # Get PORT from Render (default: 8080 if running locally)
+def run_http_server():
     PORT = int(os.getenv("PORT", 8080))
-    
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", PORT)
-    await site.start()
-    print(f"✅ HTTP server running on port {PORT}")
-
-async def health_check(request):
-    """Simple health check endpoint for Render"""
-    return web.Response(text="🤖 Telegram Bot is running")
-
-async def start_web_server():
-    """Start a minimal HTTP server (required for Render)"""
-    app = web.Application()
-    app.router.add_get("/", health_check)
-    
-    # Get PORT from Render (default: 8080 if running locally)
-    PORT = int(os.getenv("PORT", 8080))
-    
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", PORT)
-    await site.start()
-    print(f"✅ HTTP server running on port {PORT}")
-
-# ... [keep all your imports and existing code until the main() function] ...
+    with HTTPServer(('0.0.0.0', PORT), HealthCheckHandler) as httpd:
+        print(f"✅ HTTP server running on port {PORT}")
+        httpd.serve_forever()
 
 async def run_bot():
-    """Run the Telegram bot"""
     print("🤖 Starting Telegram bot...")
     app = ApplicationBuilder().token(TOKEN).post_init(post_init).build()
     
@@ -934,6 +910,7 @@ async def run_bot():
             SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
+        per_message=True  # Changed to True to avoid warning
     )
     
     app.add_handler(conv_handler)
@@ -948,28 +925,28 @@ async def run_bot():
     
     await app.run_polling()
 
-def run_http_server():
-    """Run the HTTP server in a separate thread"""
-    PORT = int(os.getenv("PORT", 8080))
-    handler = lambda req: (req.send_response(200), req.end_headers(), req.wfile.write(b"Bot is running"))
-    httpd = HTTPServer(('0.0.0.0', PORT), handler)
-    print(f"✅ HTTP server running on port {PORT}")
-    httpd.serve_forever()
-
 def main():
     # Initialize database if not exists
     if not os.path.exists(DATABASE_PATH):
         with open(DATABASE_PATH, "w") as f:
             json.dump({"keys": {}, "premium_users": {}}, f)
     
-    # Start HTTP server in a separate thread
-    http_thread = threading.Thread(target=run_http_server, daemon=True)
-    http_thread.start()
-    
-    # Run the bot in the main thread
-    asyncio.run(run_bot())
+    # Create a thread pool
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        # Run HTTP server in one thread
+        http_thread = executor.submit(run_http_server)
+        
+        # Run bot in the main thread
+        try:
+            asyncio.run(run_bot())
+        except KeyboardInterrupt:
+            print("Shutting down gracefully...")
+        except Exception as e:
+            print(f"Bot crashed with error: {e}")
+        finally:
+            # This will stop the HTTP server when the bot stops
+            http_thread.cancel()
 
 if __name__ == "__main__":
-    import threading
-    from http.server import HTTPServer, BaseHTTPRequestHandler
+    import asyncio
     main()
