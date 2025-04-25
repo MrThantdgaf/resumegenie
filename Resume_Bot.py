@@ -22,6 +22,7 @@ from datetime import datetime, timedelta
 from flask import Flask, request, jsonify
 
 import asyncio
+from threading import Thread
 
 # Initialize Flask app
 flask_app = Flask(__name__)
@@ -884,55 +885,59 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif update.message:
         await update.message.reply_text("❌ An error occurred. Please try again.")
 
+def start_flask():
+    flask_app.run(host="0.0.0.0", port=PORT)
+
+async def run_telegram_bot():
+    app = (
+        ApplicationBuilder()
+        .token(TOKEN)
+        .post_init(post_init)
+        .build()
+    )
+
+    # Conversation handler
+    conv_handler = ConversationHandler(
+        entry_points=[
+            CommandHandler("newresume", new_resume),
+            CallbackQueryHandler(new_resume, pattern="^new_resume$"),
+        ],
+        states={
+            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
+            CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_contact)],
+            EDUCATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_education)],
+            EXPERIENCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_experience)],
+            SKILLS: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_skills)],
+            SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+        per_message=False,
+    )
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("premium", premium_command))
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("privacy", show_privacy_policy))
+    app.add_handler(CommandHandler("generatekey", generate_key))
+    app.add_handler(CommandHandler("redeem", redeem_key))
+    app.add_handler(conv_handler)
+    app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_error_handler(error_handler)
+
+    print("Starting bot polling...")
+    await app.run_polling()
+
 if __name__ == "__main__":
-    import asyncio
-    from threading import Thread
+    # Start Flask in a separate thread
+    flask_thread = Thread(target=start_flask)
+    flask_thread.start()
 
-    async def main():
-        app = (
-            ApplicationBuilder()
-            .token(TOKEN)
-            .post_init(post_init)
-            .build()
-        )
-
-        # Conversation handler
-        conv_handler = ConversationHandler(
-            entry_points=[
-                CommandHandler("newresume", new_resume),
-                CallbackQueryHandler(new_resume, pattern="^new_resume$"),
-            ],
-            states={
-                NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
-                CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_contact)],
-                EDUCATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_education)],
-                EXPERIENCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_experience)],
-                SKILLS: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_skills)],
-                SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
-            },
-            fallbacks=[CommandHandler("cancel", cancel)],
-            per_message=False,
-        )
-
-        # Add handlers
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("premium", premium_command))
-        app.add_handler(CommandHandler("help", help_command))
-        app.add_handler(CommandHandler("privacy", show_privacy_policy))
-        app.add_handler(CommandHandler("generatekey", generate_key))
-        app.add_handler(CommandHandler("redeem", redeem_key))
-        app.add_handler(conv_handler)
-        app.add_handler(CallbackQueryHandler(button_handler))
-        app.add_error_handler(error_handler)
-
-        # Start Flask in a separate thread
-        def run_flask():
-            flask_app.run(host="0.0.0.0", port=PORT)
-
-        flask_thread = Thread(target=run_flask)
-        flask_thread.start()
-
-        print("Starting bot polling...")
-        await app.run_polling()
-
-    asyncio.run(main())
+    try:
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(run_telegram_bot())
+    except RuntimeError as e:
+        # If loop is already running (e.g. on Render), use create_task instead
+        if "already running" in str(e):
+            asyncio.create_task(run_telegram_bot())
+        else:
+            raise
