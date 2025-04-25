@@ -885,10 +885,10 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif update.message:
         await update.message.reply_text("❌ An error occurred. Please try again.")
 
-def start_flask():
+def run_flask():
     flask_app.run(host="0.0.0.0", port=PORT)
 
-def run_telegram_bot():
+async def run_bot():
     app = (
         ApplicationBuilder()
         .token(TOKEN)
@@ -924,18 +924,13 @@ def run_telegram_bot():
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_error_handler(error_handler)
 
-    print("Starting bot polling...")
-    app.run_polling()  # sync version!
-
+    print("✅ Telegram bot starting...")
+    await app.run_polling()
 
 if __name__ == "__main__":
-    from threading import Thread
-
-    flask_thread = Thread(target=lambda: flask_app.run(host="0.0.0.0", port=PORT))
+    # Run Flask in thread
+    flask_thread = Thread(target=run_flask)
     flask_thread.start()
 
-    telegram_thread = Thread(target=run_telegram_bot)
-    telegram_thread.start()
-
-    flask_thread.join()
-    telegram_thread.join()
+    # Run Telegram bot in main thread
+    asyncio.run(run_bot())
