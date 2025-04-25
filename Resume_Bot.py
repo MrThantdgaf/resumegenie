@@ -930,8 +930,9 @@ def setup_application_handlers(application):
     
     logger.info("Application handlers setup complete")
 
-async def run_bot():
-    """Run the bot with proper event loop handling"""
+async def run_application():
+    """Run the bot application with proper cleanup"""
+    application = None
     try:
         # Initialize database if not exists
         if not os.path.exists(DATABASE_PATH):
@@ -955,27 +956,33 @@ async def run_bot():
     except Exception as e:
         logger.error(f"Bot crashed with error: {e}")
         raise
+    finally:
+        if application is not None and application.running:
+            await application.stop()
+            await application.shutdown()
 
 def main():
-    """Main entry point that properly handles event loop"""
+    """Main entry point with proper event loop handling"""
+    # Enable tracemalloc for debugging if needed
+    # import tracemalloc
+    # tracemalloc.start()
+    
     try:
-        # Enable tracemalloc for better debugging
-        import tracemalloc
-        tracemalloc.start()
-        
-        # Create and run event loop
+        # Get or create event loop
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
-        try:
-            loop.run_until_complete(run_bot())
-        finally:
-            if not loop.is_closed():
-                loop.close()
+        # Run the application
+        loop.run_until_complete(run_application())
+        
     except KeyboardInterrupt:
         logger.info("Bot shutdown by user")
     except Exception as e:
         logger.error(f"Fatal error: {e}")
+    finally:
+        # Properly close the event loop
+        if not loop.is_closed():
+            loop.close()
 
 if __name__ == "__main__":
     main()
