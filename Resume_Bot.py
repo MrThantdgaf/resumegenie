@@ -21,6 +21,8 @@ import os, json, uuid, io
 from datetime import datetime, timedelta
 from flask import Flask, request, jsonify
 
+import asyncio
+
 # Initialize Flask app
 flask_app = Flask(__name__)
 
@@ -883,8 +885,10 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ An error occurred. Please try again.")
 
 def run_bot():
-    """Function to run the Telegram bot in the background"""
-    # Initialize the bot application
+    """Function to run the Telegram bot in the background thread with event loop"""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
     app = (
         ApplicationBuilder()
         .token(TOKEN)
@@ -910,7 +914,6 @@ def run_bot():
         per_message=False,
     )
 
-    # Add handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("premium", premium_command))
     app.add_handler(CommandHandler("help", help_command))
@@ -919,14 +922,10 @@ def run_bot():
     app.add_handler(CommandHandler("redeem", redeem_key))
     app.add_handler(conv_handler)
     app.add_handler(CallbackQueryHandler(button_handler))
-
-    # Error handler
     app.add_error_handler(error_handler)
 
     print("Bot is running as background worker...")
-    
-    # Run the bot
-    app.run_polling()
+    loop.run_until_complete(app.run_polling())
 
 if __name__ == "__main__":
     import threading
