@@ -24,6 +24,8 @@ import os, json, uuid, io
 from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from concurrent.futures import ThreadPoolExecutor
+import logging
+
 
 # Global dictionary to store user data during the conversation
 user_data = {}
@@ -895,7 +897,6 @@ async def run_bot():
     print("🤖 Starting Telegram bot...")
     app = ApplicationBuilder().token(TOKEN).post_init(post_init).build()
     
-    # Add all your handlers
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("newresume", new_resume),
@@ -910,7 +911,8 @@ async def run_bot():
             SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
-        per_message=False  # Changed to True to avoid warning
+        per_chat=True,  # Changed to per_chat instead of per_message
+        per_user=True
     )
     
     app.add_handler(conv_handler)
@@ -925,28 +927,69 @@ async def run_bot():
     
     await app.run_polling()
 
-def main():
-    # Initialize database if not exists
-    if not os.path.exists(DATABASE_PATH):
-        with open(DATABASE_PATH, "w") as f:
-            json.dump({"keys": {}, "premium_users": {}}, f)
+
+# Configure logger
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+async def setup_handlers(application):
+    """Set up all handlers for the bot"""
+    logger.info("Setting up handlers...")
     
-    # Create a thread pool
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        # Run HTTP server in one thread
-        http_thread = executor.submit(run_http_server)
+    # Conversation handler for resume creation
+    conv_handler = ConversationHandler(
+        entry_points=[
+            CommandHandler("newresume", new_resume),
+            CallbackQueryHandler(new_resume, pattern="^new_resume$"),
+        ],
+        states={
+            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
+            CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_contact)],
+            EDUCATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_education)],
+            EXPERIENCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_experience)],
+            SKILLS: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_skills)],
+            SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+        per_user=True,
+        per_chat=True
+    )
+
+    # Add all handlers
+    application.add_handler(conv_handler)
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("premium", premium_command))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("privacy", show_privacy_policy))
+    application.add_handler(CommandHandler("generatekey", generate_key))
+    application.add_handler(CommandHandler("redeem", redeem_key))
+    application.add_handler(CallbackQueryHandler(button_handler))
+    application.add_error_handler(error_handler)
+    
+    logger.info("Handlers setup complete")
+    
+async def main():
+    """Main application entry point"""
+    try:
+        # Initialize database if not exists
+        if not os.path.exists(DATABASE_PATH):
+            with open(DATABASE_PATH, "w") as f:
+                json.dump({"keys": {}, "premium_users": {}}, f)
         
-        # Run bot in the main thread
-        try:
-            asyncio.run(run_bot())
-        except KeyboardInterrupt:
-            print("Shutting down gracefully...")
-        except Exception as e:
-            print(f"Bot crashed with error: {e}")
-        finally:
-            # This will stop the HTTP server when the bot stops
-            http_thread.cancel()
+        logger.info("Creating application...")
+        application = ApplicationBuilder() \
+            .token(TOKEN) \
+            .post_init(post_init) \
+            .build()
+        
+        await setup_handlers(application)
+        
+        logger.info("Starting bot...")
+        await application.run_polling()
+        
+    except Exception as e:
+        logger.error(f"Bot crashed with error: {e}")
+        raise
 
 if __name__ == "__main__":
-    import asyncio
-    main()
+    asyncio.run(main())
