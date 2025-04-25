@@ -916,7 +916,7 @@ def setup_application_handlers(application):
     
     # Add command handlers
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("premium", premium_command))
+    application.add_handler(CommandHandler("premium", show_premium_features))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("privacy", show_privacy_policy))
     application.add_handler(CommandHandler("generatekey", generate_key))
