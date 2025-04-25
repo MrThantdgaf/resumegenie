@@ -888,7 +888,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def start_flask():
     flask_app.run(host="0.0.0.0", port=PORT)
 
-async def run_telegram_bot():
+def run_telegram_bot():
     app = (
         ApplicationBuilder()
         .token(TOKEN)
@@ -925,19 +925,17 @@ async def run_telegram_bot():
     app.add_error_handler(error_handler)
 
     print("Starting bot polling...")
-    await app.run_polling()
+    app.run_polling()  # sync version!
+
 
 if __name__ == "__main__":
-    # Start Flask in a separate thread
-    flask_thread = Thread(target=start_flask)
+    from threading import Thread
+
+    flask_thread = Thread(target=lambda: flask_app.run(host="0.0.0.0", port=PORT))
     flask_thread.start()
 
-    try:
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(run_telegram_bot())
-    except RuntimeError as e:
-        # If loop is already running (e.g. on Render), use create_task instead
-        if "already running" in str(e):
-            asyncio.create_task(run_telegram_bot())
-        else:
-            raise
+    telegram_thread = Thread(target=run_telegram_bot)
+    telegram_thread.start()
+
+    flask_thread.join()
+    telegram_thread.join()
