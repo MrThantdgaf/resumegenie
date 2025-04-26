@@ -1115,12 +1115,8 @@ async def run_bot():
 
 async def main():
     """Main async function to run both services"""
-    # Run Flask in a separate thread
-    flask_thread = Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
 
-    # Create bot application
+    # Start Telegram bot
     app = (
         ApplicationBuilder()
         .token(TOKEN)
@@ -1128,24 +1124,25 @@ async def main():
         .build()
     )
 
-    # Add all your handlers here...
+    # Set up conversation handler
     conv_handler = ConversationHandler(
-    entry_points=[
-        CommandHandler("newresume", new_resume),
-        CallbackQueryHandler(new_resume, pattern="^new_resume$"),
-    ],
-    states={
-        NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
-        CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_contact)],
-        EDUCATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_education)],
-        EXPERIENCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_experience)],
-        SKILLS: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_skills)],
-        SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
-    },
-    fallbacks=[CommandHandler("cancel", cancel)],
-    per_message=False,
-)
+        entry_points=[
+            CommandHandler("newresume", new_resume),
+            CallbackQueryHandler(new_resume, pattern="^new_resume$"),
+        ],
+        states={
+            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
+            CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_contact)],
+            EDUCATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_education)],
+            EXPERIENCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_experience)],
+            SKILLS: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_skills)],
+            SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+        per_message=False,
+    )
 
+    # Add handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("premium", premium_command))
     app.add_handler(CommandHandler("help", help_command))
@@ -1156,12 +1153,17 @@ async def main():
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_error_handler(error_handler)
 
-    # Start polling
     print("✅ Telegram bot is running...")
-    await app.updater.stop()  # Clean any existing updates
-    await app.initialize()    # Re-initialize
+    await app.initialize()
     await app.run_polling()
 
+
 if __name__ == "__main__":
-    # Remove nest_asyncio - it's not needed for this structure
-    asyncio.run(main())
+    import sys
+
+    if "serve" in sys.argv:
+        # Run Flask normally if called with `python Resume_Bot.py serve`
+        flask_app.run(host="0.0.0.0", port=PORT)
+    else:
+        # Default: run Telegram bot
+        asyncio.run(main())
