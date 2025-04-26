@@ -86,9 +86,14 @@ def health_check():
 
 # Database connection helper
 def get_db_connection():
-    conn = psycopg2.connect(DATABASE_URL, sslmode='require')
-    return conn
-
+    conn = None
+    try:
+        conn = psycopg2.connect(DATABASE_URL, sslmode='require')
+        return conn
+    except Exception as e:
+        print(f"⚠️ Failed to connect to database: {e}")
+        raise
+    
 # Initialize database tables
 def init_db():
     commands = (
@@ -123,15 +128,16 @@ init_db()
 
 def load_db():
     """Load all data from PostgreSQL"""
+    conn = None
     try:
         conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("SELECT keys, premium_users FROM premium_data WHERE id = 1")
-        result = cur.fetchone()
-        return {
-            "keys": result[0] if result else {},
-            "premium_users": result[1] if result else {}
-        }
+        with conn.cursor() as cur:
+            cur.execute("SELECT keys, premium_users FROM premium_data WHERE id = 1")
+            result = cur.fetchone()
+            return {
+                "keys": json.loads(result[0]) if result else {},
+                "premium_users": json.loads(result[1]) if result else {}
+            }
     except Exception as e:
         print(f"⚠️ DB Load Error: {e}")
         return {"keys": {}, "premium_users": {}}
@@ -144,21 +150,35 @@ def save_db(data, context: ContextTypes.DEFAULT_TYPE = None):
     conn = None
     try:
         conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("""
-            UPDATE premium_data 
-            SET keys = %s, premium_users = %s
-            WHERE id = 1
-        """, (json.dumps(data.get("keys", {})), 
-              json.dumps(data.get("premium_users", {}))))
-        conn.commit()
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE premium_data 
+                SET keys = %s, premium_users = %s
+                WHERE id = 1
+                RETURNING id
+            """, (json.dumps(data.get("keys", {})), 
+                  json.dumps(data.get("premium_users", {}))))
+            
+            # Verify the update was successful
+            if not cur.fetchone():
+                # No row was updated, insert new
+                cur.execute("""
+                    INSERT INTO premium_data (id, keys, premium_users)
+                    VALUES (1, %s, %s)
+                """, (json.dumps(data.get("keys", {})), 
+                      json.dumps(data.get("premium_users", {}))))
+            
+            conn.commit()
     except Exception as e:
         print(f"🚨 Critical DB Save Error: {e}")
         if context:
-            asyncio.create_task(context.bot.send_message(
-                chat_id=ADMIN_ID,
-                text=f"⚠️ Database write failed!\nError: {e}"
-            ))
+            asyncio.run_coroutine_threadsafe(
+                context.bot.send_message(
+                    chat_id=ADMIN_ID,
+                    text=f"⚠️ Database write failed!\nError: {e}"
+                ),
+                context.bot._loop
+            )
         raise
     finally:
         if conn:
