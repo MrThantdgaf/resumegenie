@@ -1072,18 +1072,8 @@ def run_flask():
     }
     FlaskApplication(flask_app, options).run()
 
-async def main():
-    """Start both Flask and Telegram bot"""
-    # Start Flask in a thread (safe because it's blocking I/O)
-    flask_thread = Thread(target=lambda: flask_app.run(host="0.0.0.0", port=PORT))
-    flask_thread.daemon = True
-    flask_thread.start()
-
-    # Run Telegram bot (fully async)
-    await run_bot()
-
-
 async def run_bot():
+    """Run the Telegram bot"""
     app = (
         ApplicationBuilder()
         .token(TOKEN)
@@ -1105,7 +1095,7 @@ async def run_bot():
             SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
-        per_message=False,
+        per_message=True,  # Changed to True to properly handle callbacks
     )
 
     app.add_handler(CommandHandler("start", start))
@@ -1121,10 +1111,29 @@ async def run_bot():
     print("✅ Telegram bot is running...")
     await app.run_polling()
 
+async def main():
+    """Main async function to run both services"""
+    loop = asyncio.get_event_loop()
+    
+    # Run Flask in a separate thread
+    flask_thread = Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
 
-# For Render: if the event loop is already running, use create_task
-try:
-    asyncio.get_running_loop().create_task(main())
-except RuntimeError:
-    asyncio.run(main())
+    # Run the bot in the main thread
+    await run_bot()
 
+if __name__ == "__main__":
+    import nest_asyncio
+    nest_asyncio.apply()
+
+    loop = asyncio.get_event_loop()
+
+    # Avoid Gunicorn in-thread; just run Flask directly for now
+    flask_thread = Thread(target=lambda: flask_app.run(host="0.0.0.0", port=PORT))
+    flask_thread.start()
+
+    try:
+        loop.run_until_complete(run_bot())
+    except KeyboardInterrupt:
+        print("Bot stopped by user")
