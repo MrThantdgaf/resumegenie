@@ -965,78 +965,59 @@ async def redeem_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
     key = context.args[0].strip().upper()
     db = load_db()
 
-    # Validate key format first
-    if not validate_key_format(key):
-        record_attempt(user_id, False)
-        log_security_event("invalid_key_format", user_id, key)
-        await update.message.reply_text(
-            "❌ *Invalid Key Format*\n\n"
-            "The key format is incorrect. Please check and try again.",
-            parse_mode="Markdown",
-        )
-        return
-
-    # Verify key signature
-    if not verify_key_signature(key):
-        record_attempt(user_id, False)
-        log_security_event("invalid_key_signature", user_id, key)
-        await update.message.reply_text(
-            "❌ *Invalid Key*\n\n"
-            "The key verification failed. It may be corrupted.",
-            parse_mode="Markdown",
-        )
-        return
-
-    if key in db["keys"]:
-        expiry_date = db["keys"][key]
-
-        try:
-            expiry = datetime.strptime(expiry_date, "%Y-%m-%d")
-            if expiry < datetime.now():
-                record_attempt(user_id, False)
-                log_security_event("expired_key", user_id, key)
-                await update.message.reply_text(
-                    "❌ *Expired Key*\n\nThis key has already expired.",
-                    parse_mode="Markdown",
-                )
-                return
-        except ValueError:
-            record_attempt(user_id, False)
-            log_security_event("invalid_expiry_format", user_id, key)
-            await update.message.reply_text(
-                "❌ *Invalid Key Format*\n\n"
-                "This key is corrupted. Please contact admin.",
-                parse_mode="Markdown",
-            )
-            return
-
-        # All checks passed - redeem key
-        db["premium_users"][user_id] = expiry_date
-        del db["keys"][key]
-        save_db(db, context)
-        record_attempt(user_id, True)
-        log_security_event("key_redeemed", user_id, f"Expires: {expiry_date}")
-
-        await update.message.reply_text(
-            f"🎉 *Premium Activated!*\n\n"
-            f"Your premium access is valid until *{expiry_date}*.\n\n"
-            f"You now have access to all premium features!",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("💎 Premium Features", callback_data="premium_features")],
-                [InlineKeyboardButton("✨ Create Resume", callback_data="new_resume")],
-            ]),
-        )
-    else:
+    # First check if key exists in database
+    if key not in db["keys"]:
         record_attempt(user_id, False)
         log_security_event("invalid_key_attempt", user_id, key)
         await update.message.reply_text(
             "❌ *Invalid Key*\n\n"
-            "The key you entered is invalid or has expired.\n"
+            "The key you entered is not found in our system.\n"
             "Contact @techadmin009 for assistance.",
             parse_mode="Markdown",
         )
+        return
 
+    # Get expiry date from database
+    expiry_date = db["keys"][key]
+
+    try:
+        expiry = datetime.strptime(expiry_date, "%Y-%m-%d")
+        if expiry < datetime.now():
+            record_attempt(user_id, False)
+            log_security_event("expired_key", user_id, key)
+            await update.message.reply_text(
+                "❌ *Expired Key*\n\nThis key has already expired.",
+                parse_mode="Markdown",
+            )
+            return
+    except ValueError:
+        record_attempt(user_id, False)
+        log_security_event("invalid_expiry_format", user_id, key)
+        await update.message.reply_text(
+            "❌ *Invalid Key Format*\n\n"
+            "This key is corrupted. Please contact admin.",
+            parse_mode="Markdown",
+        )
+        return
+
+    # If we get here, the key is valid - redeem it
+    db["premium_users"][user_id] = expiry_date
+    del db["keys"][key]
+    save_db(db, context)
+    record_attempt(user_id, True)
+    log_security_event("key_redeemed", user_id, f"Expires: {expiry_date}")
+
+    await update.message.reply_text(
+        f"🎉 *Premium Activated!*\n\n"
+        f"Your premium access is valid until *{expiry_date}*.\n\n"
+        f"You now have access to all premium features!",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("💎 Premium Features", callback_data="premium_features")],
+            [InlineKeyboardButton("✨ Create Resume", callback_data="new_resume")],
+        ]),
+    )
+    
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id in user_data:
