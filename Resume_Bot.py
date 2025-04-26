@@ -1109,6 +1109,8 @@ async def run_bot():
     app.add_error_handler(error_handler)
 
     print("✅ Telegram bot is running...")
+    await app.updater.stop()  # Clean any existing updates
+    await app.initialize()    # Re-initialize
     await app.run_polling()
 
 async def main():
@@ -1118,12 +1120,25 @@ async def main():
     flask_thread.daemon = True
     flask_thread.start()
 
-    # Run the bot
-    await run_bot()
+    # Create bot application
+    app = (
+        ApplicationBuilder()
+        .token(TOKEN)
+        .post_init(post_init)
+        .build()
+    )
+
+    # Add all your handlers here...
+    conv_handler = ConversationHandler(...)
+    app.add_handler(CommandHandler("start", start))
+    # ... [all other handlers]
+
+    # Start polling
+    print("✅ Telegram bot is running...")
+    await app.updater.stop()  # Clean any existing updates
+    await app.initialize()    # Re-initialize
+    await app.run_polling()
 
 if __name__ == "__main__":
-    import nest_asyncio
-    nest_asyncio.apply()
-
-    # Start the main async function
+    # Remove nest_asyncio - it's not needed for this structure
     asyncio.run(main())
