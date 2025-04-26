@@ -4,11 +4,13 @@ import json
 import uuid
 import io
 import time
+import asyncio
 from datetime import datetime, timedelta
 from threading import Thread
 from concurrent.futures import ThreadPoolExecutor
 
 # Third-party imports
+import psycopg2
 from flask import Flask, request, jsonify
 from fpdf import FPDF
 from telegram import (
@@ -38,11 +40,9 @@ from premium_security import (
     check_rate_limit,
     record_attempt,
     log_security_event,
+    MAX_REDEEM_ATTEMPTS,
+    REDEEM_COOLDOWN
 )
-
-# Async support
-import asyncio
-
 
 # Initialize Flask app
 flask_app = Flask(__name__)
@@ -65,7 +65,7 @@ TEMPLATES = {
 TOKEN = os.getenv("TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
 PORT = int(os.getenv("PORT", 10000))  # Default to 10000 if not set
-DATABASE_PATH = "/etc/secrets/premium_data.json"
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not TOKEN:
     raise RuntimeError("Telegram bot TOKEN is missing. Please set it as an environment variable.")
@@ -73,37 +73,92 @@ if not TOKEN:
 if not ADMIN_ID:
     raise RuntimeError("ADMIN_ID is missing. Please set it as an environment variable.")
 
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is missing. Please set it as an environment variable.")
+
 # Add Flask route for health check
 @flask_app.route('/')
 def health_check():
     return jsonify({"status": "ok", "message": "ResumeGenie bot is running", "port": PORT})
 
-def load_db():
-    if not os.path.exists(DATABASE_PATH):
-        with open(DATABASE_PATH, "w") as f:
-            json.dump({"keys": {}, "premium_users": {}}, f)
+# Database connection helper
+def get_db_connection():
+    conn = psycopg2.connect(DATABASE_URL, sslmode='require')
+    return conn
 
+# Initialize database tables
+def init_db():
+    commands = (
+        """
+        CREATE TABLE IF NOT EXISTS premium_data (
+            id SERIAL PRIMARY KEY,
+            keys JSONB NOT NULL DEFAULT '{}'::jsonb,
+            premium_users JSONB NOT NULL DEFAULT '{}'::jsonb
+        )
+        """,
+        """INSERT INTO premium_data (id, keys, premium_users)
+           VALUES (1, '{}', '{}')
+           ON CONFLICT (id) DO NOTHING"""
+    )
+    
     try:
-        with open(DATABASE_PATH, "r") as f:
-            return json.load(f)
-    except (json.JSONDecodeError, FileNotFoundError):
-        data = {"keys": {}, "premium_users": {}}
-        with open(DATABASE_PATH, "w") as f:
-            json.dump(data, f)
-        return data
+        conn = get_db_connection()
+        cur = conn.cursor()
+        for command in commands:
+            cur.execute(command)
+        conn.commit()
+        cur.close()
+    except Exception as e:
+        print(f"⚠️ DB Init Error: {e}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+# Initialize the database
+init_db()
+
+def load_db():
+    """Load all data from PostgreSQL"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT keys, premium_users FROM premium_data WHERE id = 1")
+        result = cur.fetchone()
+        return {
+            "keys": result[0] if result else {},
+            "premium_users": result[1] if result else {}
+        }
+    except Exception as e:
+        print(f"⚠️ DB Load Error: {e}")
+        return {"keys": {}, "premium_users": {}}
+    finally:
+        if conn:
+            conn.close()
 
 def save_db(data):
-    clean_data = {
-        "keys": data.get("keys", {}),
-        "premium_users": data.get("premium_users", {}),
-    }
-    with open(DATABASE_PATH, "w") as f:
-        json.dump(clean_data, f, indent=2)
-
-# Ensure the database file is initialized
-if not os.path.exists(DATABASE_PATH):
-    with open(DATABASE_PATH, "w") as f:
-        json.dump({"keys": {}, "premium_users": {}}, f)
+    """Save data to PostgreSQL"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE premium_data 
+            SET keys = %s, premium_users = %s
+            WHERE id = 1
+        """, (json.dumps(data.get("keys", {})), 
+              json.dumps(data.get("premium_users", {}))))
+        conn.commit()
+    except Exception as e:
+        print(f"🚨 Critical DB Save Error: {e}")
+        # Send alert to admin
+        asyncio.run(context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"⚠️ Database write failed!\nError: {e}"
+        ))
+        raise
+    finally:
+        if conn:
+            conn.close()
 
 def is_premium(user_id):
     if not user_id:
@@ -790,13 +845,13 @@ async def get_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# Updated generate_key function
 async def generate_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         admin_id = str(ADMIN_ID)
         user_id = str(update.effective_user.id)
         
         print(f"User ID trying to generate key: {user_id} (type: {type(user_id)})")
+        print(f"Admin ID: {admin_id} (type: {type(admin_id)})")
         
         if user_id != admin_id:
             log_security_event("unauthorized_key_generation", user_id)
@@ -827,8 +882,10 @@ async def generate_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     except Exception as e:
         print(f"GenerateKey Error: {e}")
-        raise
-
+        await update.message.reply_text(
+            "❌ Failed to generate key. Please check logs.",
+            parse_mode="Markdown"
+        )
 
 async def redeem_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
@@ -1014,6 +1071,184 @@ def run_flask():
     }
     FlaskApplication(flask_app, options).run()
 
+# Standard library imports
+import os
+import json
+import uuid
+import io
+import time
+import asyncio
+from datetime import datetime, timedelta
+from threading import Thread
+from concurrent.futures import ThreadPoolExecutor
+
+# Third-party imports
+import psycopg2
+from flask import Flask, request, jsonify
+from fpdf import FPDF
+from telegram import (
+    Update,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    MenuButtonCommands,
+    BotCommand,
+)
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    ConversationHandler,
+    filters,
+    CallbackQueryHandler,
+)
+
+# Local application imports
+from premium_security import (
+    generate_secure_key,
+    validate_key_format,
+    verify_key_signature,
+    check_rate_limit,
+    record_attempt,
+    log_security_event,
+    MAX_REDEEM_ATTEMPTS,
+    REDEEM_COOLDOWN
+)
+
+# Initialize Flask app
+flask_app = Flask(__name__)
+
+# Global dictionary to store user data during the conversation
+user_data = {}
+
+# Define states for conversation as simple integers
+NAME, CONTACT, EDUCATION, EXPERIENCE, SKILLS, SUMMARY, TEMPLATE = range(7)
+
+# Template styles with emoji icons
+TEMPLATES = {
+    "BASIC": "📄 Basic (Free)",
+    "MODERN": "💎 Modern (Premium)",
+    "CREATIVE": "🎨 Creative (Premium)",
+    "MINIMALIST": "✂️ Minimalist (Premium)",
+}
+
+# Fetch environment variables
+TOKEN = os.getenv("TOKEN")
+ADMIN_ID = os.getenv("ADMIN_ID")
+PORT = int(os.getenv("PORT", 10000))  # Default to 10000 if not set
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not TOKEN:
+    raise RuntimeError("Telegram bot TOKEN is missing. Please set it as an environment variable.")
+
+if not ADMIN_ID:
+    raise RuntimeError("ADMIN_ID is missing. Please set it as an environment variable.")
+
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is missing. Please set it as an environment variable.")
+
+# Add Flask route for health check
+@flask_app.route('/')
+def health_check():
+    return jsonify({"status": "ok", "message": "ResumeGenie bot is running", "port": PORT})
+
+# Database connection helper
+def get_db_connection():
+    conn = psycopg2.connect(DATABASE_URL, sslmode='require')
+    return conn
+
+# Initialize database tables
+def init_db():
+    commands = (
+        """
+        CREATE TABLE IF NOT EXISTS premium_data (
+            id SERIAL PRIMARY KEY,
+            keys JSONB NOT NULL DEFAULT '{}'::jsonb,
+            premium_users JSONB NOT NULL DEFAULT '{}'::jsonb
+        )
+        """,
+        """INSERT INTO premium_data (id, keys, premium_users)
+           VALUES (1, '{}', '{}')
+           ON CONFLICT (id) DO NOTHING"""
+    )
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        for command in commands:
+            cur.execute(command)
+        conn.commit()
+        cur.close()
+    except Exception as e:
+        print(f"⚠️ DB Init Error: {e}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+# Initialize the database
+init_db()
+
+def load_db():
+    """Load all data from PostgreSQL"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT keys, premium_users FROM premium_data WHERE id = 1")
+        result = cur.fetchone()
+        return {
+            "keys": result[0] if result else {},
+            "premium_users": result[1] if result else {}
+        }
+    except Exception as e:
+        print(f"⚠️ DB Load Error: {e}")
+        return {"keys": {}, "premium_users": {}}
+    finally:
+        if conn:
+            conn.close()
+
+def save_db(data):
+    """Save data to PostgreSQL"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE premium_data 
+            SET keys = %s, premium_users = %s
+            WHERE id = 1
+        """, (json.dumps(data.get("keys", {})), 
+              json.dumps(data.get("premium_users", {}))))
+        conn.commit()
+    except Exception as e:
+        print(f"🚨 Critical DB Save Error: {e}")
+        # Send alert to admin
+        asyncio.run(context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"⚠️ Database write failed!\nError: {e}"
+        ))
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+def is_premium(user_id):
+    if not user_id:
+        return False
+
+    db = load_db()
+    user_id_str = str(user_id)
+
+    if user_id_str in db["premium_users"]:
+        expiry_date = db["premium_users"][user_id_str]
+        try:
+            expiry = datetime.strptime(expiry_date, "%Y-%m-%d")
+            return expiry > datetime.now()
+        except ValueError:
+            return False
+    return False
+
 async def run_bot():
     """Run the Telegram bot"""
     app = (
@@ -1037,7 +1272,7 @@ async def run_bot():
             SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
-        per_message=False,  # Changed to True to properly handle callbacks
+        per_message=False,
     )
 
     app.add_handler(CommandHandler("start", start))
@@ -1052,30 +1287,20 @@ async def run_bot():
 
     print("✅ Telegram bot is running...")
     await app.run_polling()
-
+    
 async def main():
     """Main async function to run both services"""
-    loop = asyncio.get_event_loop()
-    
     # Run Flask in a separate thread
     flask_thread = Thread(target=run_flask)
     flask_thread.daemon = True
     flask_thread.start()
 
-    # Run the bot in the main thread
+    # Run the bot
     await run_bot()
 
 if __name__ == "__main__":
     import nest_asyncio
     nest_asyncio.apply()
 
-    loop = asyncio.get_event_loop()
-
-    # Avoid Gunicorn in-thread; just run Flask directly for now
-    flask_thread = Thread(target=lambda: flask_app.run(host="0.0.0.0", port=PORT))
-    flask_thread.start()
-
-    try:
-        loop.run_until_complete(run_bot())
-    except KeyboardInterrupt:
-        print("Bot stopped by user")
+    # Start the main async function
+    asyncio.run(main())
