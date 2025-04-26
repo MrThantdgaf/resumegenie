@@ -792,38 +792,42 @@ async def get_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Updated generate_key function
 async def generate_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    admin_id = str(ADMIN_ID)
-    user_id = str(update.effective_user.id)
-    
-    print(f"User ID trying to generate key: {user_id} (type: {type(user_id)})")
-    
-    if user_id != admin_id:
-        log_security_event("unauthorized_key_generation", user_id)
-        await update.message.reply_text("❌ Admin only command.")
-        return
+    try:
+        admin_id = str(ADMIN_ID)
+        user_id = str(update.effective_user.id)
+        
+        print(f"User ID trying to generate key: {user_id} (type: {type(user_id)})")
+        
+        if user_id != admin_id:
+            log_security_event("unauthorized_key_generation", user_id)
+            await update.message.reply_text("❌ Admin only command.")
+            return
 
-    duration = 30
-    if context.args and context.args[0].isdigit():
-        duration = int(context.args[0])
-        if duration > 365:
-            duration = 365
+        duration = 30
+        if context.args and context.args[0].isdigit():
+            duration = int(context.args[0])
+            if duration > 365:
+                duration = 365
 
-    key, expiry = generate_secure_key(duration)
+        key, expiry = generate_secure_key(duration)
 
-    db = load_db()
-    db["keys"][key] = expiry
-    save_db(db)
+        db = load_db()
+        db["keys"][key] = expiry
+        save_db(db)
 
-    log_security_event("key_generated", user_id, f"Duration: {duration} days")
+        log_security_event("key_generated", user_id, f"Duration: {duration} days")
 
-    await update.message.reply_text(
-        f"🔑 *New Secure Premium Key Generated*\n\n"
-        f"Key: `{key}`\n"
-        f"Duration: {duration} days\n"
-        f"Expires: {expiry}\n\n"
-        f"User can redeem with:\n`/redeem {key}`",
-        parse_mode="Markdown",
-    )
+        await update.message.reply_text(
+            f"🔑 *New Secure Premium Key Generated*\n\n"
+            f"Key: `{key}`\n"
+            f"Duration: {duration} days\n"
+            f"Expires: {expiry}\n\n"
+            f"User can redeem with:\n`/redeem {key}`",
+            parse_mode="Markdown",
+        )
+    except Exception as e:
+        print(f"GenerateKey Error: {e}")
+        raise
 
 
 async def redeem_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -935,21 +939,26 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        if update and update.callback_query:
-            await update.callback_query.answer("❌ An error occurred. Please try again.")
-        elif update and update.message:
-            await update.message.reply_text("❌ An error occurred. Please try again.")
-        else:
-            print("Error occurred with no update or message context")
-            
-        # Log the actual error
-        error_msg = f"Error: {context.error}\nUpdate: {update}"
-        print(error_msg)
-        log_security_event("bot_error", "system", str(context.error))
-        
-    except Exception as e:
-        print(f"Error in error handler: {e}")
+    error_msg = (
+        f"⚠️ Error: {context.error}\n"
+        f"Update: {update}\n"
+        f"User: {update.effective_user if update else 'No update object'}"
+    )
+    
+    # Print to console (visible in Render logs)
+    print(error_msg)
+    
+    # Send error to admin
+    await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=f"🚨 Bot Error:\n{error_msg}"
+    )
+    
+    # Notify user
+    if update and update.message:
+        await update.message.reply_text("❌ An error occurred. Our team has been notified.")
+    elif update and update.callback_query:
+        await update.callback_query.answer("❌ Error occurred. Please try again.", show_alert=True)
 
 async def security_monitor(context: ContextTypes.DEFAULT_TYPE):
     """Periodic security check"""
@@ -1028,7 +1037,7 @@ async def run_bot():
             SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
-        per_message=True,  # Changed to True to properly handle callbacks
+        per_message=False,  # Changed to True to properly handle callbacks
     )
 
     app.add_handler(CommandHandler("start", start))
