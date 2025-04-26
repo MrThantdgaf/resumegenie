@@ -25,6 +25,15 @@ import asyncio
 from threading import Thread
 from concurrent.futures import ThreadPoolExecutor
 
+from premium_security import (
+    generate_secure_key,
+    validate_key_format,
+    verify_key_signature,
+    check_rate_limit,
+    record_attempt,
+    log_security_event
+)
+
 # Initialize Flask app
 flask_app = Flask(__name__)
 
@@ -115,6 +124,7 @@ async def post_init(application):
     ]
     await application.bot.set_my_commands(commands)
     await application.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+    asyncio.create_task(security_monitor(application))
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -772,22 +782,26 @@ async def get_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def generate_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
+        log_security_event("unauthorized_key_generation", update.effective_user.id)
         await update.message.reply_text("❌ Admin only command.")
         return
 
     duration = 30  # Default duration in days
     if context.args and context.args[0].isdigit():
         duration = int(context.args[0])
+        if duration > 365:  # Limit to 1 year max
+            duration = 365
 
-    key = str(uuid.uuid4())[:8].upper()
-    expiry = (datetime.now() + timedelta(days=duration)).strftime("%Y-%m-%d")
+    key, expiry = generate_secure_key(duration)
 
     db = load_db()
     db["keys"][key] = expiry
     save_db(db)
 
+    log_security_event("key_generated", ADMIN_ID, f"Duration: {duration} days")
+
     await update.message.reply_text(
-        f"🔑 *New Premium Key Generated*\n\n"
+        f"🔑 *New Secure Premium Key Generated*\n\n"
         f"Key: `{key}`\n"
         f"Duration: {duration} days\n"
         f"Expires: {expiry}\n\n"
@@ -797,7 +811,19 @@ async def generate_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def redeem_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    
+    # Check rate limiting
+    if check_rate_limit(user_id):
+        remaining_time = int(REDEEM_COOLDOWN - (time.time() - redeem_attempts[user_id]['last_attempt']))
+        await update.message.reply_text(
+            f"⏳ Too many attempts! Please try again in {remaining_time} seconds.",
+            parse_mode="Markdown",
+        )
+        return
+
     if not context.args or len(context.args) != 1:
+        record_attempt(user_id, False)
         await update.message.reply_text(
             "Usage: `/redeem YOUR_KEY`\n\n"
             "Contact @techadmin009 to get a premium key.",
@@ -806,8 +832,29 @@ async def redeem_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     key = context.args[0].strip().upper()
-    user_id = str(update.effective_user.id)
     db = load_db()
+
+    # Validate key format first
+    if not validate_key_format(key):
+        record_attempt(user_id, False)
+        log_security_event("invalid_key_format", user_id, key)
+        await update.message.reply_text(
+            "❌ *Invalid Key Format*\n\n"
+            "The key format is incorrect. Please check and try again.",
+            parse_mode="Markdown",
+        )
+        return
+
+    # Verify key signature
+    if not verify_key_signature(key):
+        record_attempt(user_id, False)
+        log_security_event("invalid_key_signature", user_id, key)
+        await update.message.reply_text(
+            "❌ *Invalid Key*\n\n"
+            "The key verification failed. It may be corrupted.",
+            parse_mode="Markdown",
+        )
+        return
 
     if key in db["keys"]:
         expiry_date = db["keys"][key]
@@ -815,12 +862,16 @@ async def redeem_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             expiry = datetime.strptime(expiry_date, "%Y-%m-%d")
             if expiry < datetime.now():
+                record_attempt(user_id, False)
+                log_security_event("expired_key", user_id, key)
                 await update.message.reply_text(
-                    "❌ *Expired Key*\n\n" "This key has already expired.",
+                    "❌ *Expired Key*\n\nThis key has already expired.",
                     parse_mode="Markdown",
                 )
                 return
         except ValueError:
+            record_attempt(user_id, False)
+            log_security_event("invalid_expiry_format", user_id, key)
             await update.message.reply_text(
                 "❌ *Invalid Key Format*\n\n"
                 "This key is corrupted. Please contact admin.",
@@ -828,45 +879,32 @@ async def redeem_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
+        # All checks passed - redeem key
         db["premium_users"][user_id] = expiry_date
         del db["keys"][key]
         save_db(db)
+        record_attempt(user_id, True)
+        log_security_event("key_redeemed", user_id, f"Expires: {expiry_date}")
 
-        if is_premium(update.effective_user.id):
-            await update.message.reply_text(
-                f"🎉 *Premium Activated!*\n\n"
-                f"Your premium access is valid until *{expiry_date}*.\n\n"
-                f"You now have access to all premium features!",
-                parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(
-                    [
-                        [
-                            InlineKeyboardButton(
-                                "💎 Premium Features", callback_data="premium_features"
-                            )
-                        ],
-                        [
-                            InlineKeyboardButton(
-                                "✨ Create Resume", callback_data="new_resume"
-                            )
-                        ],
-                    ]
-                ),
-            )
-        else:
-            await update.message.reply_text(
-                "⚠️ *Activation Error*\n\n"
-                "Premium was not activated properly. Please contact admin.",
-                parse_mode="Markdown",
-            )
+        await update.message.reply_text(
+            f"🎉 *Premium Activated!*\n\n"
+            f"Your premium access is valid until *{expiry_date}*.\n\n"
+            f"You now have access to all premium features!",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("💎 Premium Features", callback_data="premium_features")],
+                [InlineKeyboardButton("✨ Create Resume", callback_data="new_resume")],
+            ]),
+        )
     else:
+        record_attempt(user_id, False)
+        log_security_event("invalid_key_attempt", user_id, key)
         await update.message.reply_text(
             "❌ *Invalid Key*\n\n"
             "The key you entered is invalid or has expired.\n"
             "Contact @techadmin009 for assistance.",
             parse_mode="Markdown",
         )
-
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -885,6 +923,37 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.callback_query.answer("❌ An error occurred. Please try again.")
     elif update.message:
         await update.message.reply_text("❌ An error occurred. Please try again.")
+
+async def security_monitor(context: ContextTypes.DEFAULT_TYPE):
+    """Periodic security check"""
+    while True:
+        try:
+            # Check for brute force attempts
+            now = time.time()
+            suspicious_users = [
+                user_id for user_id, record in redeem_attempts.items()
+                if record['attempts'] >= MAX_REDEEM_ATTEMPTS * 2
+            ]
+            
+            if suspicious_users:
+                message = "🚨 *Security Alert* 🚨\n\n"
+                message += "Multiple failed redemption attempts detected:\n"
+                for user_id in suspicious_users:
+                    attempts = redeem_attempts[user_id]['attempts']
+                    message += f"- User {user_id}: {attempts} failed attempts\n"
+                
+                await context.bot.send_message(
+                    chat_id=ADMIN_ID,
+                    text=message,
+                    parse_mode="Markdown"
+                )
+                
+            # Sleep for 5 minutes between checks
+            await asyncio.sleep(300)
+            
+        except Exception as e:
+            print(f"Security monitor error: {e}")
+            await asyncio.sleep(60)
 
 def run_flask():
     from gunicorn.app.base import BaseApplication
