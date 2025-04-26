@@ -962,29 +962,41 @@ async def redeem_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    key = context.args[0].strip().upper()
+    # Clean the input key
+    input_key = context.args[0].strip().upper()
     db = load_db()
 
-    # First check if key exists in database
-    if key not in db["keys"]:
+    # Debug: Log all keys in database
+    print(f"Database keys: {db['keys']}")
+    print(f"Looking for key: {input_key}")
+
+    # Find matching key (case insensitive and ignoring whitespace)
+    matching_key = None
+    for db_key in db["keys"].keys():
+        if db_key.upper().strip() == input_key.upper().strip():
+            matching_key = db_key
+            break
+
+    if not matching_key:
         record_attempt(user_id, False)
-        log_security_event("invalid_key_attempt", user_id, key)
+        log_security_event("invalid_key_attempt", user_id, input_key)
         await update.message.reply_text(
-            "❌ *Invalid Key*\n\n"
-            "The key you entered is not found in our system.\n"
-            "Contact @techadmin009 for assistance.",
+            f"❌ *Invalid Key*\n\n"
+            f"The key '{input_key}' was not found in our system.\n"
+            f"Database contains: {list(db['keys'].keys())}\n"  # Debug info
+            f"Contact @techadmin009 for assistance.",
             parse_mode="Markdown",
         )
         return
 
-    # Get expiry date from database
-    expiry_date = db["keys"][key]
+    # Get expiry date from database using the original key (matching_key)
+    expiry_date = db["keys"][matching_key]
 
     try:
         expiry = datetime.strptime(expiry_date, "%Y-%m-%d")
         if expiry < datetime.now():
             record_attempt(user_id, False)
-            log_security_event("expired_key", user_id, key)
+            log_security_event("expired_key", user_id, matching_key)
             await update.message.reply_text(
                 "❌ *Expired Key*\n\nThis key has already expired.",
                 parse_mode="Markdown",
@@ -992,7 +1004,7 @@ async def redeem_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
     except ValueError:
         record_attempt(user_id, False)
-        log_security_event("invalid_expiry_format", user_id, key)
+        log_security_event("invalid_expiry_format", user_id, matching_key)
         await update.message.reply_text(
             "❌ *Invalid Key Format*\n\n"
             "This key is corrupted. Please contact admin.",
@@ -1002,7 +1014,7 @@ async def redeem_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # If we get here, the key is valid - redeem it
     db["premium_users"][user_id] = expiry_date
-    del db["keys"][key]
+    del db["keys"][matching_key]  # Use original key from database
     save_db(db, context)
     record_attempt(user_id, True)
     log_security_event("key_redeemed", user_id, f"Expires: {expiry_date}")
