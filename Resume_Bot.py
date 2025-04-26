@@ -1129,9 +1129,32 @@ async def main():
     )
 
     # Add all your handlers here...
-    conv_handler = ConversationHandler(...)
+    conv_handler = ConversationHandler(
+    entry_points=[
+        CommandHandler("newresume", new_resume),
+        CallbackQueryHandler(new_resume, pattern="^new_resume$"),
+    ],
+    states={
+        NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
+        CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_contact)],
+        EDUCATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_education)],
+        EXPERIENCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_experience)],
+        SKILLS: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_skills)],
+        SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
+    },
+    fallbacks=[CommandHandler("cancel", cancel)],
+    per_message=False,
+)
+
     app.add_handler(CommandHandler("start", start))
-    # ... [all other handlers]
+    app.add_handler(CommandHandler("premium", premium_command))
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("privacy", show_privacy_policy))
+    app.add_handler(CommandHandler("generatekey", generate_key))
+    app.add_handler(CommandHandler("redeem", redeem_key))
+    app.add_handler(conv_handler)
+    app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_error_handler(error_handler)
 
     # Start polling
     print("✅ Telegram bot is running...")
