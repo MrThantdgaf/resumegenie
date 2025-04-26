@@ -1,3 +1,16 @@
+# Standard library imports
+import os
+import json
+import uuid
+import io
+import time
+from datetime import datetime, timedelta
+from threading import Thread
+from concurrent.futures import ThreadPoolExecutor
+
+# Third-party imports
+from flask import Flask, request, jsonify
+from fpdf import FPDF
 from telegram import (
     Update,
     ReplyKeyboardMarkup,
@@ -16,23 +29,20 @@ from telegram.ext import (
     filters,
     CallbackQueryHandler,
 )
-from fpdf import FPDF
-import os, json, uuid, io
-from datetime import datetime, timedelta
-from flask import Flask, request, jsonify
 
-import asyncio
-from threading import Thread
-from concurrent.futures import ThreadPoolExecutor
-
+# Local application imports
 from premium_security import (
     generate_secure_key,
     validate_key_format,
     verify_key_signature,
     check_rate_limit,
     record_attempt,
-    log_security_event
+    log_security_event,
 )
+
+# Async support
+import asyncio
+
 
 # Initialize Flask app
 flask_app = Flask(__name__)
@@ -780,16 +790,22 @@ async def get_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+# Updated generate_key function
 async def generate_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        log_security_event("unauthorized_key_generation", update.effective_user.id)
+    admin_id = str(ADMIN_ID)
+    user_id = str(update.effective_user.id)
+    
+    print(f"User ID trying to generate key: {user_id} (type: {type(user_id)})")
+    
+    if user_id != admin_id:
+        log_security_event("unauthorized_key_generation", user_id)
         await update.message.reply_text("❌ Admin only command.")
         return
 
-    duration = 30  # Default duration in days
+    duration = 30
     if context.args and context.args[0].isdigit():
         duration = int(context.args[0])
-        if duration > 365:  # Limit to 1 year max
+        if duration > 365:
             duration = 365
 
     key, expiry = generate_secure_key(duration)
@@ -798,7 +814,7 @@ async def generate_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db["keys"][key] = expiry
     save_db(db)
 
-    log_security_event("key_generated", ADMIN_ID, f"Duration: {duration} days")
+    log_security_event("key_generated", user_id, f"Duration: {duration} days")
 
     await update.message.reply_text(
         f"🔑 *New Secure Premium Key Generated*\n\n"
@@ -919,10 +935,21 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.callback_query:
-        await update.callback_query.answer("❌ An error occurred. Please try again.")
-    elif update.message:
-        await update.message.reply_text("❌ An error occurred. Please try again.")
+    try:
+        if update and update.callback_query:
+            await update.callback_query.answer("❌ An error occurred. Please try again.")
+        elif update and update.message:
+            await update.message.reply_text("❌ An error occurred. Please try again.")
+        else:
+            print("Error occurred with no update or message context")
+            
+        # Log the actual error
+        error_msg = f"Error: {context.error}\nUpdate: {update}"
+        print(error_msg)
+        log_security_event("bot_error", "system", str(context.error))
+        
+    except Exception as e:
+        print(f"Error in error handler: {e}")
 
 async def security_monitor(context: ContextTypes.DEFAULT_TYPE):
     """Periodic security check"""
