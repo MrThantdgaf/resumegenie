@@ -32,6 +32,8 @@ from telegram.ext import (
     CallbackQueryHandler,
 )
 
+from psycopg2.pool import SimpleConnectionPool
+
 # Local application imports
 from premium_security import (
     generate_secure_key,
@@ -79,11 +81,37 @@ if not ADMIN_ID:
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL is missing. Please set it as an environment variable.")
 
+# Initialize connection pool
+connection_pool = SimpleConnectionPool(
+    minconn=1,
+    maxconn=10,
+    dsn=DATABASE_URL,
+    sslmode='require'
+)
+
+def get_db_connection():
+    return connection_pool.getconn()
+
+def put_db_connection(conn):
+    connection_pool.putconn(conn)
+
 # Add Flask route for health check
 @flask_app.route('/')
 def health_check():
     return jsonify({"status": "ok", "message": "ResumeGenie bot is running", "port": PORT})
 
+def db_health_check():
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1")
+            return jsonify({"status": "ok", "database": "connected"})
+    except Exception as e:
+        return jsonify({"status": "error", "database": str(e)}), 500
+    finally:
+        if conn:
+            put_db_connection(conn)
+            
 # Database connection helper
 def get_db_connection():
     conn = None
@@ -99,30 +127,32 @@ def init_db():
     commands = (
         """
         CREATE TABLE IF NOT EXISTS premium_data (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY,
             keys JSONB NOT NULL DEFAULT '{}'::jsonb,
             premium_users JSONB NOT NULL DEFAULT '{}'::jsonb
         )
         """,
-        """INSERT INTO premium_data (id, keys, premium_users)
-           VALUES (1, '{}', '{}')
-           ON CONFLICT (id) DO NOTHING"""
+        """
+        INSERT INTO premium_data (id, keys, premium_users)
+        VALUES (1, '{}', '{}')
+        ON CONFLICT (id) DO NOTHING
+        """
     )
     
+    conn = None
     try:
         conn = get_db_connection()
-        cur = conn.cursor()
-        for command in commands:
-            cur.execute(command)
-        conn.commit()
-        cur.close()
+        with conn.cursor() as cur:
+            for command in commands:
+                cur.execute(command)
+            conn.commit()
     except Exception as e:
         print(f"⚠️ DB Init Error: {e}")
         raise
     finally:
         if conn:
             conn.close()
-
+            
 # Initialize the database
 init_db()
 
@@ -1071,6 +1101,16 @@ async def security_monitor(context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             print(f"Security monitor error: {e}")
             await asyncio.sleep(60)
+
+async def shutdown(application):
+    """Shutdown the bot gracefully"""
+    await application.stop()
+    await application.shutdown()
+
+def stop_signal_handler(signum, frame):
+    """Handle stop signals"""
+    print("🚦 Received stop signal, shutting down...")
+    asyncio.create_task(shutdown(application))
 
 def run_flask():
     from gunicorn.app.base import BaseApplication
