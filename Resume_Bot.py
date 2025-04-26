@@ -1072,20 +1072,18 @@ def run_flask():
     }
     FlaskApplication(flask_app, options).run()
 
-def start_bot_and_server():
-    """Run Flask and Telegram bot together"""
-    # Start Flask (for health check endpoint)
+async def main():
+    """Start both Flask and Telegram bot"""
+    # Start Flask in a thread (safe because it's blocking I/O)
     flask_thread = Thread(target=lambda: flask_app.run(host="0.0.0.0", port=PORT))
     flask_thread.daemon = True
     flask_thread.start()
 
-    # Run Telegram bot inside event loop
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(run_bot())
+    # Run Telegram bot (fully async)
+    await run_bot()
 
 
 async def run_bot():
-    """Run the Telegram bot"""
     app = (
         ApplicationBuilder()
         .token(TOKEN)
@@ -1124,6 +1122,9 @@ async def run_bot():
     await app.run_polling()
 
 
-if __name__ == "__main__":
-    start_bot_and_server()
+# For Render: if the event loop is already running, use create_task
+try:
+    asyncio.get_running_loop().create_task(main())
+except RuntimeError:
+    asyncio.run(main())
 
