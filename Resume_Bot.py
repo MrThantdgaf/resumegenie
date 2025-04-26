@@ -50,6 +50,9 @@ flask_app = Flask(__name__)
 # Global dictionary to store user data during the conversation
 user_data = {}
 
+redeem_attempts = {}
+
+
 # Define states for conversation as simple integers
 NAME, CONTACT, EDUCATION, EXPERIENCE, SKILLS, SUMMARY, TEMPLATE = range(7)
 
@@ -1125,15 +1128,17 @@ async def main():
 
 if __name__ == "__main__":
     import nest_asyncio
+    import asyncio
+
     nest_asyncio.apply()
 
-    loop = asyncio.get_event_loop()
+    from threading import Thread
 
-    # Avoid Gunicorn in-thread; just run Flask directly for now
+    # Start Flask server in another thread
     flask_thread = Thread(target=lambda: flask_app.run(host="0.0.0.0", port=PORT))
+    flask_thread.daemon = True
     flask_thread.start()
 
-    try:
-        loop.run_until_complete(run_bot())
-    except KeyboardInterrupt:
-        print("Bot stopped by user")
+    # Run bot properly
+    asyncio.run(run_bot())
+
