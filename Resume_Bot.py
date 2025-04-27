@@ -121,27 +121,19 @@ def put_db_connection(conn):
     connection_pool.putconn(conn)
 
 def init_db():
-    commands = (
-        """
-        CREATE TABLE IF NOT EXISTS premium_data (
-            id INTEGER PRIMARY KEY,
-            keys JSONB NOT NULL DEFAULT '{}'::jsonb,
-            premium_users JSONB NOT NULL DEFAULT '{}'::jsonb
-        );
-        """,
-        """
-        INSERT INTO premium_data (id, keys, premium_users)
-        VALUES (1, '{}', '{}')
-        ON CONFLICT (id) DO NOTHING
-        """
-    )
-    
+    command = """
+    CREATE TABLE IF NOT EXISTS premium_data (
+        id SERIAL PRIMARY KEY,
+        value TEXT UNIQUE NOT NULL,
+        expiry_date DATE NOT NULL,
+        is_key BOOLEAN NOT NULL
+    );
+    """
     conn = None
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
-            for command in commands:
-                cur.execute(command)
+            cur.execute(command)
             conn.commit()
     except Exception as e:
         logger.error(f"DB Init Error: {e}")
@@ -150,76 +142,33 @@ def init_db():
         if conn:
             put_db_connection(conn)
 
+
 init_db()
 
-def load_db():
-    """Load all data from PostgreSQL"""
-    conn = None
-    try:
-        conn = get_db_connection()
-        with conn.cursor() as cur:
-            cur.execute("SELECT keys, premium_users FROM premium_data WHERE id = 1")
-            result = cur.fetchone()
-            
-            # Handle cases where the data might be None or already decoded
-            keys = result[0] if result else {}
-            premium_users = result[1] if result else {}
-            
-            # Convert to dict if they're strings
-            if isinstance(keys, str):
-                keys = json.loads(keys)
-            if isinstance(premium_users, str):
-                premium_users = json.loads(premium_users)
-                
-            return {
-                "keys": keys if isinstance(keys, dict) else {},
-                "premium_users": premium_users if isinstance(premium_users, dict) else {}
-            }
-    except Exception as e:
-        logger.error(f"DB Load Error: {e}")
-        return {"keys": {}, "premium_users": {}}
-    finally:
-        if conn:
-            put_db_connection(conn)
-
-def save_db(data):
-    """Save data to PostgreSQL"""
-    conn = None
-    try:
-        conn = get_db_connection()
-        with conn.cursor() as cur:
-            # Ensure we're storing JSON strings
-            keys = json.dumps(data.get("keys", {}))
-            premium_users = json.dumps(data.get("premium_users", {}))
-            
-            cur.execute("""
-                UPDATE premium_data 
-                SET keys = %s, premium_users = %s
-                WHERE id = 1
-            """, (keys, premium_users))
-            conn.commit()
-    except Exception as e:
-        logger.error(f"DB Save Error: {e}")
-        raise
-    finally:
-        if conn:
-            put_db_connection(conn)
 
 def is_premium(user_id):
     if not user_id:
         return False
 
-    db = load_db()
-    user_id_str = str(user_id)
-
-    if user_id_str in db["premium_users"]:
-        expiry_date = db["premium_users"][user_id_str]
-        try:
-            expiry = datetime.strptime(expiry_date, "%Y-%m-%d")
-            return expiry > datetime.now()
-        except ValueError:
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT expiry_date FROM premium_data WHERE value = %s AND is_key = FALSE",
+                (str(user_id),)
+            )
+            row = cur.fetchone()
+            if row:
+                expiry_date = row[0]
+                return expiry_date > datetime.now().date()
             return False
-    return False
+    except Exception as e:
+        logger.error(f"DB Premium Check Error: {e}")
+        return False
+    finally:
+        if conn:
+            put_db_connection(conn)
+
 async def post_init(application):
     commands = [
         BotCommand("start", "Start the bot"),
@@ -920,28 +869,29 @@ async def get_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def generate_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        # Verify admin privileges
         if str(update.effective_user.id) != ADMIN_ID:
             log_security_event("unauthorized_key_generation", str(update.effective_user.id))
             await update.message.reply_text("❌ Admin only command.")
             return
 
-        # Parse duration from command arguments
-        duration = 30  # Default duration
+        duration = 30
         if context.args and context.args[0].isdigit():
-            duration = min(int(context.args[0]), 365)  # Cap at 1 year
+            duration = min(int(context.args[0]), 365)
 
-        # Generate secure key
         key, expiry = generate_secure_key(duration)
 
-        # Save to database
-        db = load_db()
-        db["keys"][key] = expiry
-        save_db(db)
+        # Save key
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO premium_data (value, expiry_date, is_key) VALUES (%s, %s, TRUE)",
+                (key, expiry)
+            )
+            conn.commit()
+        put_db_connection(conn)
 
         log_security_event("key_generated", str(update.effective_user.id), f"Duration: {duration} days")
 
-        # Send success message with key details
         await update.message.reply_text(
             f"🔑 *New Premium Key Generated*\n\n"
             f"Key: `{key}`\n"
@@ -953,15 +903,11 @@ async def generate_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         logger.error(f"GenerateKey Error: {e}")
-        await update.message.reply_text(
-            "❌ Failed to generate key. Please check logs.",
-            parse_mode="Markdown"
-        )
+        await update.message.reply_text("❌ Failed to generate key. Please check logs.", parse_mode="Markdown")
 
 async def redeem_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
-    
-    # Check rate limiting
+
     if check_rate_limit(user_id):
         remaining_time = int(REDEEM_COOLDOWN - (time.time() - redeem_attempts[user_id]['last_attempt']))
         await update.message.reply_text(
@@ -970,92 +916,95 @@ async def redeem_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Validate command format
     if not context.args or len(context.args) != 1:
         record_attempt(user_id, False)
         await update.message.reply_text(
-            "Usage: `/redeem YOUR_KEY`\n\n"
-            "Contact @techadmin009 to get a premium key.",
+            "Usage: `/redeem YOUR_KEY`\n\nContact @techadmin009 to get a premium key.",
             parse_mode="Markdown",
         )
         return
 
-    # Clean and validate key format
     input_key = context.args[0].strip()
     if not validate_key_format(input_key):
         record_attempt(user_id, False)
         log_security_event("invalid_key_format", user_id, input_key)
         await update.message.reply_text(
-            "❌ *Invalid Key Format*\n\n"
-            "The key you entered is not in the correct format.",
+            "❌ *Invalid Key Format*\n\nThe key you entered is not in the correct format.",
             parse_mode="Markdown",
         )
         return
 
-    # Verify key signature
     if not verify_key_signature(input_key):
         record_attempt(user_id, False)
         log_security_event("invalid_key_signature", user_id, input_key)
         await update.message.reply_text(
-            "❌ *Invalid Key*\n\n"
-            "This key appears to be tampered with.",
+            "❌ *Invalid Key*\n\nThis key appears to be tampered with.",
             parse_mode="Markdown",
         )
         return
 
-    # Check database for key
-    db = load_db()
-    if input_key not in db["keys"]:
-        record_attempt(user_id, False)
-        log_security_event("invalid_key_attempt", user_id, input_key)
-        await update.message.reply_text(
-            "❌ *Invalid Key*\n\n"
-            "This key was not found in our system.",
-            parse_mode="Markdown",
-        )
-        return
-
-    # Check expiration
-    expiry_date = db["keys"][input_key]
     try:
-        expiry = datetime.strptime(expiry_date, "%Y-%m-%d")
-        if expiry < datetime.now():
-            record_attempt(user_id, False)
-            log_security_event("expired_key", user_id, input_key)
-            await update.message.reply_text(
-                "❌ *Expired Key*\n\nThis key has already expired.",
-                parse_mode="Markdown",
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT expiry_date FROM premium_data WHERE value = %s AND is_key = TRUE",
+                (input_key,)
             )
-            return
-    except ValueError:
-        record_attempt(user_id, False)
-        log_security_event("invalid_expiry_format", user_id, input_key)
+            row = cur.fetchone()
+
+            if not row:
+                record_attempt(user_id, False)
+                log_security_event("invalid_key_attempt", user_id, input_key)
+                await update.message.reply_text(
+                    "❌ *Invalid Key*\n\nThis key was not found in our system.",
+                    parse_mode="Markdown",
+                )
+                return
+
+            expiry_date = row[0]
+            if expiry_date < datetime.now().date():
+                record_attempt(user_id, False)
+                log_security_event("expired_key", user_id, input_key)
+                await update.message.reply_text(
+                    "❌ *Expired Key*\n\nThis key has already expired.",
+                    parse_mode="Markdown",
+                )
+                return
+
+            # Save user as premium
+            cur.execute(
+                "INSERT INTO premium_data (value, expiry_date, is_key) VALUES (%s, %s, FALSE) "
+                "ON CONFLICT (value) DO UPDATE SET expiry_date = EXCLUDED.expiry_date",
+                (user_id, expiry_date)
+            )
+
+            # Delete the key
+            cur.execute(
+                "DELETE FROM premium_data WHERE value = %s AND is_key = TRUE",
+                (input_key,)
+            )
+
+            conn.commit()
+        put_db_connection(conn)
+
+        record_attempt(user_id, True)
+        log_security_event("key_redeemed", user_id, f"Expires: {expiry_date}")
+
         await update.message.reply_text(
-            "❌ *Invalid Key Format*\n\n"
-            "This key is corrupted. Please contact admin.",
+            f"🎉 *Premium Activated!*\n\n"
+            f"Your premium access is valid until *{expiry_date}*.\n\n"
+            f"You now have access to all premium templates and features!",
             parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("💎 Premium Features", callback_data="premium_features")],
+                [InlineKeyboardButton("✨ Create Resume", callback_data="new_resume")],
+            ]),
         )
-        return
 
-    # Redeem the key
-    db["premium_users"][user_id] = expiry_date
-    del db["keys"][input_key]
-    save_db(db)
-    
-    record_attempt(user_id, True)
-    log_security_event("key_redeemed", user_id, f"Expires: {expiry_date}")
+    except Exception as e:
+        logger.error(f"RedeemKey Error: {e}")
+        await update.message.reply_text("❌ Failed to redeem key. Please try again.", parse_mode="Markdown")
 
-    # Success message
-    await update.message.reply_text(
-        f"🎉 *Premium Activated!*\n\n"
-        f"Your premium access is valid until *{expiry_date}*.\n\n"
-        f"You now have access to all premium templates and features!",
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("💎 Premium Features", callback_data="premium_features")],
-            [InlineKeyboardButton("✨ Create Resume", callback_data="new_resume")],
-        ]),
-    )
         
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
