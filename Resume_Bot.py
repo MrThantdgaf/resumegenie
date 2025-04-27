@@ -285,7 +285,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-        if query.data == "new_resume":
+    if query.data == "new_resume":
         # Instead of calling new_resume directly, send /newresume command
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
