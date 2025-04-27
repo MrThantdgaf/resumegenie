@@ -918,41 +918,39 @@ async def get_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def generate_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        admin_id = str(ADMIN_ID)
-        user_id = str(update.effective_user.id)
-        
-        print(f"User ID trying to generate key: {user_id} (type: {type(user_id)})")
-        print(f"Admin ID: {admin_id} (type: {type(admin_id)})")
-        
-        if user_id != admin_id:
-            log_security_event("unauthorized_key_generation", user_id)
+        # Verify admin privileges
+        if str(update.effective_user.id) != ADMIN_ID:
+            log_security_event("unauthorized_key_generation", str(update.effective_user.id))
             await update.message.reply_text("❌ Admin only command.")
             return
 
-        duration = 30
+        # Parse duration from command arguments
+        duration = 30  # Default duration
         if context.args and context.args[0].isdigit():
-            duration = int(context.args[0])
-            if duration > 365:
-                duration = 365
+            duration = min(int(context.args[0]), 365)  # Cap at 1 year
 
+        # Generate secure key
         key, expiry = generate_secure_key(duration)
 
+        # Save to database
         db = load_db()
         db["keys"][key] = expiry
-        save_db(db,context)
+        save_db(db)
 
-        log_security_event("key_generated", user_id, f"Duration: {duration} days")
+        log_security_event("key_generated", str(update.effective_user.id), f"Duration: {duration} days")
 
+        # Send success message with key details
         await update.message.reply_text(
-            f"🔑 *New Secure Premium Key Generated*\n\n"
+            f"🔑 *New Premium Key Generated*\n\n"
             f"Key: `{key}`\n"
             f"Duration: {duration} days\n"
             f"Expires: {expiry}\n\n"
-            f"User can redeem with:\n`/redeem {key}`",
+            f"Share this with user:\n`/redeem {key}`",
             parse_mode="Markdown",
         )
+
     except Exception as e:
-        print(f"GenerateKey Error: {e}")
+        logger.error(f"GenerateKey Error: {e}")
         await update.message.reply_text(
             "❌ Failed to generate key. Please check logs.",
             parse_mode="Markdown"
@@ -970,6 +968,7 @@ async def redeem_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    # Validate command format
     if not context.args or len(context.args) != 1:
         record_attempt(user_id, False)
         await update.message.reply_text(
@@ -979,41 +978,48 @@ async def redeem_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Clean the input key
-    input_key = context.args[0].strip().upper()
-    db = load_db()
-
-    # Debug: Log all keys in database
-    print(f"Database keys: {db['keys']}")
-    print(f"Looking for key: {input_key}")
-
-    # Find matching key (case insensitive and ignoring whitespace)
-    matching_key = None
-    for db_key in db["keys"].keys():
-        if db_key.upper().strip() == input_key.upper().strip():
-            matching_key = db_key
-            break
-
-    if not matching_key:
+    # Clean and validate key format
+    input_key = context.args[0].strip()
+    if not validate_key_format(input_key):
         record_attempt(user_id, False)
-        log_security_event("invalid_key_attempt", user_id, input_key)
+        log_security_event("invalid_key_format", user_id, input_key)
         await update.message.reply_text(
-            f"❌ *Invalid Key*\n\n"
-            f"The key '{input_key}' was not found in our system.\n"
-            f"Database contains: {list(db['keys'].keys())}\n"  # Debug info
-            f"Contact @techadmin009 for assistance.",
+            "❌ *Invalid Key Format*\n\n"
+            "The key you entered is not in the correct format.",
             parse_mode="Markdown",
         )
         return
 
-    # Get expiry date from database using the original key (matching_key)
-    expiry_date = db["keys"][matching_key]
+    # Verify key signature
+    if not verify_key_signature(input_key):
+        record_attempt(user_id, False)
+        log_security_event("invalid_key_signature", user_id, input_key)
+        await update.message.reply_text(
+            "❌ *Invalid Key*\n\n"
+            "This key appears to be tampered with.",
+            parse_mode="Markdown",
+        )
+        return
 
+    # Check database for key
+    db = load_db()
+    if input_key not in db["keys"]:
+        record_attempt(user_id, False)
+        log_security_event("invalid_key_attempt", user_id, input_key)
+        await update.message.reply_text(
+            "❌ *Invalid Key*\n\n"
+            "This key was not found in our system.",
+            parse_mode="Markdown",
+        )
+        return
+
+    # Check expiration
+    expiry_date = db["keys"][input_key]
     try:
         expiry = datetime.strptime(expiry_date, "%Y-%m-%d")
         if expiry < datetime.now():
             record_attempt(user_id, False)
-            log_security_event("expired_key", user_id, matching_key)
+            log_security_event("expired_key", user_id, input_key)
             await update.message.reply_text(
                 "❌ *Expired Key*\n\nThis key has already expired.",
                 parse_mode="Markdown",
@@ -1021,7 +1027,7 @@ async def redeem_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
     except ValueError:
         record_attempt(user_id, False)
-        log_security_event("invalid_expiry_format", user_id, matching_key)
+        log_security_event("invalid_expiry_format", user_id, input_key)
         await update.message.reply_text(
             "❌ *Invalid Key Format*\n\n"
             "This key is corrupted. Please contact admin.",
@@ -1029,24 +1035,26 @@ async def redeem_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # If we get here, the key is valid - redeem it
+    # Redeem the key
     db["premium_users"][user_id] = expiry_date
-    del db["keys"][matching_key]  # Use original key from database
-    save_db(db, context)
+    del db["keys"][input_key]
+    save_db(db)
+    
     record_attempt(user_id, True)
     log_security_event("key_redeemed", user_id, f"Expires: {expiry_date}")
 
+    # Success message
     await update.message.reply_text(
         f"🎉 *Premium Activated!*\n\n"
         f"Your premium access is valid until *{expiry_date}*.\n\n"
-        f"You now have access to all premium features!",
+        f"You now have access to all premium templates and features!",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("💎 Premium Features", callback_data="premium_features")],
             [InlineKeyboardButton("✨ Create Resume", callback_data="new_resume")],
         ]),
     )
-    
+        
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id in user_data:
