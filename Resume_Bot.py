@@ -1,25 +1,21 @@
 # Standard library imports
+import asyncio
+import io
 import os
 import json
-import uuid
-import io
 import time
-import asyncio
-import sys
-from datetime import datetime, timedelta
+import logging
+from datetime import datetime
 from threading import Thread
-from concurrent.futures import ThreadPoolExecutor
 
 # Third-party imports
 import psycopg2
 from telegram import (
     Update,
-    ReplyKeyboardMarkup,
-    ReplyKeyboardRemove,
     InlineKeyboardMarkup,
     InlineKeyboardButton,
-    MenuButtonCommands,
-    BotCommand,
+    BotCommand,  # Added BotCommand import
+    MenuButtonCommands,  # Added MenuButtonCommands import
 )
 from telegram.ext import (
     ApplicationBuilder,
@@ -29,6 +25,7 @@ from telegram.ext import (
     ConversationHandler,
     filters,
     CallbackQueryHandler,
+    ReplyKeyboardRemove,  # Added ReplyKeyboardRemove import
 )
 from psycopg2.pool import SimpleConnectionPool
 
@@ -44,20 +41,21 @@ from premium_security import (
     REDEEM_COOLDOWN
 )
 
-import logging
+# Configure logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
+logger = logging.getLogger(__name__)
 
 # Global dictionary to store user data during the conversation
 user_data = {}
 redeem_attempts = {}
 
-# Define states for conversation as simple integers
-NAME, CONTACT, EDUCATION, EXPERIENCE, SKILLS, SUMMARY, TEMPLATE = range(7)
+# Define states for conversation
+NAME, CONTACT, EDUCATION, EXPERIENCE, SKILLS, SUMMARY = range(6)
 
-# Template styles with emoji icons
+# Template styles
 TEMPLATES = {
     "BASIC": "📄 Basic (Free)",
     "MODERN": "💎 Modern (Premium)",
@@ -71,13 +69,11 @@ ADMIN_ID = os.getenv("ADMIN_ID")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not TOKEN:
-    raise RuntimeError("Telegram bot TOKEN is missing. Please set it as an environment variable.")
-
+    raise RuntimeError("Telegram bot TOKEN is missing.")
 if not ADMIN_ID:
-    raise RuntimeError("ADMIN_ID is missing. Please set it as an environment variable.")
-
+    raise RuntimeError("ADMIN_ID is missing.")
 if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL is missing. Please set it as an environment variable.")
+    raise RuntimeError("DATABASE_URL is missing.")
 
 # Initialize connection pool
 connection_pool = SimpleConnectionPool(
@@ -88,23 +84,11 @@ connection_pool = SimpleConnectionPool(
 )
 
 def get_db_connection():
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            conn = connection_pool.getconn()
-            # Test the connection
-            with conn.cursor() as cur:
-                cur.execute("SELECT 1")
-            return conn
-        except Exception as e:
-            if attempt == max_retries - 1:
-                raise
-            time.sleep(1)
+    return connection_pool.getconn()
 
 def put_db_connection(conn):
     connection_pool.putconn(conn)
 
-# Initialize database tables
 def init_db():
     commands = (
         """
@@ -112,7 +96,7 @@ def init_db():
             id INTEGER PRIMARY KEY,
             keys JSONB NOT NULL DEFAULT '{}'::jsonb,
             premium_users JSONB NOT NULL DEFAULT '{}'::jsonb
-        )
+        );
         """,
         """
         INSERT INTO premium_data (id, keys, premium_users)
@@ -123,19 +107,21 @@ def init_db():
     
     conn = None
     try:
+        pass  # Add your code here
+    except Exception as e:
+        logger.error(f"An error occurred: {e}")
         conn = get_db_connection()
         with conn.cursor() as cur:
             for command in commands:
                 cur.execute(command)
             conn.commit()
     except Exception as e:
-        print(f"⚠️ DB Init Error: {e}")
+        logger.error(f"DB Init Error: {e}")
         raise
     finally:
         if conn:
             conn.close()
-            
-# Initialize the database
+
 init_db()
 
 def load_db():
@@ -151,13 +137,13 @@ def load_db():
                 "premium_users": json.loads(result[1]) if result else {}
             }
     except Exception as e:
-        print(f"⚠️ DB Load Error: {e}")
+        logger.error(f"DB Load Error: {e}")
         return {"keys": {}, "premium_users": {}}
     finally:
         if conn:
             conn.close()
 
-def save_db(data, context: ContextTypes.DEFAULT_TYPE = None):
+def save_db(data):
     """Save data to PostgreSQL"""
     conn = None
     try:
@@ -167,30 +153,11 @@ def save_db(data, context: ContextTypes.DEFAULT_TYPE = None):
                 UPDATE premium_data 
                 SET keys = %s, premium_users = %s
                 WHERE id = 1
-                RETURNING id
-            """, (json.dumps(data.get("keys", {})), 
-                  json.dumps(data.get("premium_users", {}))))
-            
-            # Verify the update was successful
-            if not cur.fetchone():
-                # No row was updated, insert new
-                cur.execute("""
-                    INSERT INTO premium_data (id, keys, premium_users)
-                    VALUES (1, %s, %s)
-                """, (json.dumps(data.get("keys", {})), 
-                      json.dumps(data.get("premium_users", {}))))
-            
+            """), (json.dumps(data.get("keys", {})), 
+                  json.dumps(data.get("premium_users", {})))
             conn.commit()
     except Exception as e:
-        print(f"🚨 Critical DB Save Error: {e}")
-        if context:
-            asyncio.run_coroutine_threadsafe(
-                context.bot.send_message(
-                    chat_id=ADMIN_ID,
-                    text=f"⚠️ Database write failed!\nError: {e}"
-                ),
-                context.bot._loop
-            )
+        logger.error(f"DB Save Error: {e}")
         raise
     finally:
         if conn:
@@ -211,7 +178,6 @@ def is_premium(user_id):
         except ValueError:
             return False
     return False
-
 async def post_init(application):
     commands = [
         BotCommand("start", "Start the bot"),
@@ -1089,34 +1055,27 @@ async def shutdown(application):
     await application.shutdown()
     # Close all database connections
     connection_pool.closeall()
-
-async def run_bot():
-    app = (
-        ApplicationBuilder()
-        .token(TOKEN)
-        .post_init(post_init)
-        .concurrent_updates(True)
-        .build()
-    )
-
-    # Set up handlers
+    
+def run_bot():
+    """Run the Telegram bot in the background"""
+    app = ApplicationBuilder().token(TOKEN).build()
     setup_handlers(app)
-
-    print("✅ Telegram bot is running...")
-
-    try:
-        await app.run_polling()
-    except Exception as e:
-        print(f"❌ Error running bot: {e}")
-
+    
+    # Run polling in a separate thread
+    def polling_thread():
+        app.run_polling()
+    
+    thread = Thread(target=polling_thread)
+    thread.daemon = True
+    thread.start()
+    
+    logger.info("✅ Telegram bot is running in background...")
+    return thread
 
 def setup_handlers(app):
-    """Configure all handlers with proper conversation settings"""
+    """Configure all handlers"""
     conv_handler = ConversationHandler(
-        entry_points=[
-            CommandHandler("newresume", new_resume),
-            CallbackQueryHandler(new_resume, pattern="^new_resume$"),
-        ],
+        entry_points=[CommandHandler("newresume", new_resume)],
         states={
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
             CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_contact)],
@@ -1126,12 +1085,8 @@ def setup_handlers(app):
             SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
-        per_message=False,  # Explicitly set to False
-        per_user=True,
-        per_chat=True,
     )
 
-    # Add all handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("premium", premium_command))
     app.add_handler(CommandHandler("help", help_command))
@@ -1142,27 +1097,15 @@ def setup_handlers(app):
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_error_handler(error_handler)
 
+
 if __name__ == "__main__":
-    # Ensure only one instance runs
+    bot_thread = run_bot()
+    
     try:
-        app = (
-            ApplicationBuilder()
-            .token(TOKEN)
-            .post_init(post_init)
-            .concurrent_updates(True)
-            .build()
-        )
-
-        setup_handlers(app)
-
-        print("✅ Telegram bot is running...")
-        app.run_polling()
-    except Exception as e:
-        print(f"❌ Error running bot: {e}")
-        # Attempt to shutdown gracefully
-        try:
-            asyncio.run(shutdown(app))
-        except:
-            pass
-        # Exit with error code
-        sys.exit(1)
+        # Keep the main thread alive
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        logger.info("Shutting down bot...")
+        # Proper cleanup would be needed here
+        pass
