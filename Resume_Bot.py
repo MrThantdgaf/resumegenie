@@ -1088,11 +1088,12 @@ async def shutdown(application):
     await application.shutdown()
 
 async def run_bot():
-    """Run the Telegram bot"""
+    """Run the Telegram bot with proper single-instance handling"""
     app = (
         ApplicationBuilder()
         .token(TOKEN)
         .post_init(post_init)
+        .concurrent_updates(True)  # Enable concurrent updates handling
         .build()
     )
 
@@ -1100,26 +1101,37 @@ async def run_bot():
     setup_handlers(app)
 
     print("✅ Telegram bot is running...")
+    
     try:
-        await app.initialize()
-        await app.start()
-        await app.updater.start_polling()
+        # Explicitly delete any existing webhook
+        await app.bot.delete_webhook(drop_pending_updates=True)
         
-        # Keep the bot running until interrupted
-        while True:
-            await asyncio.sleep(3600)  # Sleep for 1 hour
+        # Start polling
+        async with app:
+            await app.start()
+            await app.updater.start_polling()
+            
+            # Keep running until interrupted
+            while True:
+                await asyncio.sleep(3600)
+                
     except asyncio.CancelledError:
         pass
     except KeyboardInterrupt:
         print("\n🛑 Bot stopped by user")
+    except Exception as e:
+        print(f"❌ Error running bot: {e}")
+        raise
     finally:
-        await app.updater.stop()
-        await app.stop()
-        await app.shutdown()
+        try:
+            await app.updater.stop()
+            await app.stop()
+            await app.shutdown()
+        except Exception as e:
+            print(f"⚠️ Error during shutdown: {e}")
 
 def setup_handlers(app):
-    """Configure all handlers"""
-    # Conversation handler without per_message=True
+    """Configure all handlers with proper conversation settings"""
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("newresume", new_resume),
@@ -1134,7 +1146,9 @@ def setup_handlers(app):
             SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
-        # Removed per_message=True to avoid the warning
+        per_message=False,  # Explicitly set to False
+        per_user=True,
+        per_chat=True,
     )
 
     # Add all handlers
@@ -1149,9 +1163,16 @@ def setup_handlers(app):
     app.add_error_handler(error_handler)
 
 if __name__ == "__main__":
+    # Configure logging
+    logging.basicConfig(
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        level=logging.INFO
+    )
+    
     try:
         asyncio.run(run_bot())
     except KeyboardInterrupt:
         print("\n🛑 Bot stopped by user")
     except Exception as e:
-        print(f"❌ Error running bot: {e}")
+        print(f"❌ Fatal error: {e}")
+        sys.exit(1)
