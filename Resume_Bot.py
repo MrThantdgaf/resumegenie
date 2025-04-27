@@ -1089,12 +1089,11 @@ async def shutdown(application):
     await application.shutdown()
 
 async def run_bot():
-    """Run the Telegram bot with proper single-instance handling"""
     app = (
         ApplicationBuilder()
         .token(TOKEN)
         .post_init(post_init)
-        .concurrent_updates(True)  # Enable concurrent updates handling
+        .concurrent_updates(True)
         .build()
     )
 
@@ -1102,34 +1101,12 @@ async def run_bot():
     setup_handlers(app)
 
     print("✅ Telegram bot is running...")
-    
+
     try:
-        # Explicitly delete any existing webhook
-        await app.bot.delete_webhook(drop_pending_updates=True)
-        
-        # Start polling
-        async with app:
-            await app.start()
-            await app.updater.start_polling()
-            
-            # Keep running until interrupted
-            while True:
-                await asyncio.sleep(3600)
-                
-    except asyncio.CancelledError:
-        pass
-    except KeyboardInterrupt:
-        print("\n🛑 Bot stopped by user")
+        await app.run_polling()
     except Exception as e:
         print(f"❌ Error running bot: {e}")
-        raise
-    finally:
-        try:
-            await app.updater.stop()
-            await app.stop()
-            await app.shutdown()
-        except Exception as e:
-            print(f"⚠️ Error during shutdown: {e}")
+
 
 def setup_handlers(app):
     """Configure all handlers with proper conversation settings"""
