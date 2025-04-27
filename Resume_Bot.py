@@ -1141,16 +1141,16 @@ def setup_handlers(app):
     app.add_error_handler(error_handler)
 
 if __name__ == "__main__":
-    # Configure logging
-    logging.basicConfig(
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        level=logging.INFO
+    app = (
+        ApplicationBuilder()
+        .token(TOKEN)
+        .post_init(post_init)
+        .concurrent_updates(True)
+        .build()
     )
-    
-    try:
-        asyncio.run(run_bot())
-    except KeyboardInterrupt:
-        print("\n🛑 Bot stopped by user")
-    except Exception as e:
-        print(f"❌ Fatal error: {e}")
-        sys.exit(1)
+
+    setup_handlers(app)
+
+    print("✅ Telegram bot is running...")
+
+    app.run_polling()
