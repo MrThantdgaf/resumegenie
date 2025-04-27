@@ -1034,8 +1034,6 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif update and update.callback_query:
         await update.callback_query.answer("❌ Error occurred. Please try again.", show_alert=True)
 
-
-
 async def security_monitor(context: ContextTypes.DEFAULT_TYPE):
     """Periodic security check"""
     while True:
@@ -1109,7 +1107,22 @@ async def run_bot():
     app.add_error_handler(error_handler)
 
     print("✅ Telegram bot is running...")
-    await app.run_polling()
-
+    try:
+        await app.run_polling()
+    except asyncio.CancelledError:
+        pass
+    finally:
+        await app.shutdown()
+        
 if __name__ == "__main__":
-    asyncio.run(run_bot())
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    try:
+        loop.run_until_complete(run_bot())
+    except KeyboardInterrupt:
+        print("\n🛑 Bot stopped by user")
+    except Exception as e:
+        print(f"❌ Error running bot: {e}")
+    finally:
+        loop.close()
