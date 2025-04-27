@@ -1087,6 +1087,8 @@ async def shutdown(application):
     """Shutdown the bot gracefully"""
     await application.stop()
     await application.shutdown()
+    # Close all database connections
+    connection_pool.closeall()
 
 async def run_bot():
     app = (
@@ -1141,16 +1143,26 @@ def setup_handlers(app):
     app.add_error_handler(error_handler)
 
 if __name__ == "__main__":
-    app = (
-        ApplicationBuilder()
-        .token(TOKEN)
-        .post_init(post_init)
-        .concurrent_updates(True)
-        .build()
-    )
+    # Ensure only one instance runs
+    try:
+        app = (
+            ApplicationBuilder()
+            .token(TOKEN)
+            .post_init(post_init)
+            .concurrent_updates(True)
+            .build()
+        )
 
-    setup_handlers(app)
+        setup_handlers(app)
 
-    print("✅ Telegram bot is running...")
-
-    app.run_polling()
+        print("✅ Telegram bot is running...")
+        app.run_polling()
+    except Exception as e:
+        print(f"❌ Error running bot: {e}")
+        # Attempt to shutdown gracefully
+        try:
+            asyncio.run(shutdown(app))
+        except:
+            pass
+        # Exit with error code
+        sys.exit(1)
