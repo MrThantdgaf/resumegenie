@@ -3,6 +3,7 @@ import asyncio
 import io
 import os
 import json
+import signal
 import time
 import logging
 from datetime import datetime
@@ -1103,16 +1104,54 @@ async def main():
     setup_handlers(app)
     
     logger.info("✅ Starting Telegram bot...")
-    await app.run_polling()
+    
+    try:
+        await app.initialize()
+        await app.start()
+        await app.updater.start_polling()  # Only if using polling
+        
+        # Keep the bot running until stopped
+        while True:
+            await asyncio.sleep(3600)  # Sleep for 1 hour and repeat
+            
+    except asyncio.CancelledError:
+        logger.info("Shutdown signal received...")
+    finally:
+        logger.info("Shutting down gracefully...")
+        await app.updater.stop()  # Only if using polling
+        await app.stop()
+        await app.shutdown()
+        connection_pool.closeall()
+        logger.info("✅ Cleanup complete. Exiting...")
 
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
+        # Create new event loop for Python 3.11+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # Run the main coroutine
+        main_task = loop.create_task(main())
+        
+        # Handle shutdown signals
+        def shutdown_handler():
+            logger.info("Signal received, initiating shutdown...")
+            main_task.cancel()
+            
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(sig, shutdown_handler)
+            
+        loop.run_forever()
+        
     except KeyboardInterrupt:
-        logger.info("Bot stopped by user")
+        logger.info("Keyboard interrupt received")
     except Exception as e:
         logger.error(f"Bot crashed: {e}")
     finally:
-        # Clean up database connections
-        connection_pool.closeall()
-        logger.info("✅ Cleanup complete. Exiting...")
+        tasks = asyncio.all_tasks(loop)
+        for task in tasks:
+            task.cancel()
+        
+        loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
+        loop.close()
+        logger.info("✅ Fully shut down")
