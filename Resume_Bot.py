@@ -219,14 +219,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown",
         )
 
-async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await show_premium_features(update, context)
-
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await show_help(update, context)
-
-
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -1120,8 +1112,8 @@ def setup_handlers(app):
     # Add all handlers
     app.add_handler(conv_handler)
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("premium", premium_command))
-    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("premium", show_premium_features))
+    app.add_handler(CommandHandler("help", show_help))
     app.add_handler(CommandHandler("privacy", show_privacy_policy))
     app.add_handler(CommandHandler("generatekey", generate_key))
     app.add_handler(CommandHandler("redeem", redeem_key))
