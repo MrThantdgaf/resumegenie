@@ -130,9 +130,20 @@ def load_db():
         with conn.cursor() as cur:
             cur.execute("SELECT keys, premium_users FROM premium_data WHERE id = 1")
             result = cur.fetchone()
+            
+            # Handle cases where the data might be None or already decoded
+            keys = result[0] if result else {}
+            premium_users = result[1] if result else {}
+            
+            # Convert to dict if they're strings
+            if isinstance(keys, str):
+                keys = json.loads(keys)
+            if isinstance(premium_users, str):
+                premium_users = json.loads(premium_users)
+                
             return {
-                "keys": json.loads(result[0]) if result else {},
-                "premium_users": json.loads(result[1]) if result else {}
+                "keys": keys if isinstance(keys, dict) else {},
+                "premium_users": premium_users if isinstance(premium_users, dict) else {}
             }
     except Exception as e:
         logger.error(f"DB Load Error: {e}")
@@ -147,12 +158,15 @@ def save_db(data):
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
+            # Ensure we're storing JSON strings
+            keys = json.dumps(data.get("keys", {}))
+            premium_users = json.dumps(data.get("premium_users", {}))
+            
             cur.execute("""
                 UPDATE premium_data 
                 SET keys = %s, premium_users = %s
                 WHERE id = 1
-            """, (json.dumps(data.get("keys", {})), 
-                json.dumps(data.get("premium_users", {}))))
+            """, (keys, premium_users))
             conn.commit()
     except Exception as e:
         logger.error(f"DB Save Error: {e}")
