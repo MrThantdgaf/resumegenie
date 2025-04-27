@@ -1,5 +1,4 @@
 # Standard library imports
-# Standard library imports
 import asyncio
 import io
 import os
@@ -29,6 +28,18 @@ from telegram.ext import (
     CallbackQueryHandler,
 )
 from psycopg2.pool import SimpleConnectionPool
+
+# Local application imports
+from premium_security import (
+    generate_secure_key,
+    validate_key_format,
+    verify_key_signature,
+    check_rate_limit,
+    record_attempt,
+    log_security_event,
+    MAX_REDEEM_ATTEMPTS,
+    REDEEM_COOLDOWN
+)
 
 # Configure logging
 logging.basicConfig(
@@ -96,9 +107,6 @@ def init_db():
     
     conn = None
     try:
-        pass  # Add your code here
-    except Exception as e:
-        logger.error(f"An error occurred: {e}")
         conn = get_db_connection()
         with conn.cursor() as cur:
             for command in commands:
@@ -1047,12 +1055,14 @@ async def shutdown(application):
     
 def run_bot():
     """Run the Telegram bot in the background"""
-    app = ApplicationBuilder().token(TOKEN).build()
+    app = ApplicationBuilder().token(TOKEN).post_init(post_init).build()
     setup_handlers(app)
     
-    # Run polling in a separate thread
+    # Create an event loop for the thread
     def polling_thread():
-        app.run_polling()
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(app.run_polling())
     
     thread = Thread(target=polling_thread)
     thread.daemon = True
