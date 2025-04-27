@@ -90,7 +90,7 @@ async def db_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Database error: {str(e)}")
     finally:
         if conn:
-            conn.close()
+            put_db_connection(conn)
 
 async def check_state(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -148,7 +148,7 @@ def init_db():
         raise
     finally:
         if conn:
-            conn.close()
+            put_db_connection(conn)
 
 init_db()
 
@@ -180,7 +180,7 @@ def load_db():
         return {"keys": {}, "premium_users": {}}
     finally:
         if conn:
-            conn.close()
+            put_db_connection(conn)
 
 def save_db(data):
     """Save data to PostgreSQL"""
@@ -203,7 +203,7 @@ def save_db(data):
         raise
     finally:
         if conn:
-            conn.close()
+            put_db_connection(conn)
 
 def is_premium(user_id):
     if not user_id:
