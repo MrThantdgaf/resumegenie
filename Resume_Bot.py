@@ -43,6 +43,12 @@ from premium_security import (
     REDEEM_COOLDOWN
 )
 
+import logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+
 # Global dictionary to store user data during the conversation
 user_data = {}
 redeem_attempts = {}
@@ -81,7 +87,18 @@ connection_pool = SimpleConnectionPool(
 )
 
 def get_db_connection():
-    return connection_pool.getconn()
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            conn = connection_pool.getconn()
+            # Test the connection
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+            return conn
+        except Exception as e:
+            if attempt == max_retries - 1:
+                raise
+            time.sleep(1)
 
 def put_db_connection(conn):
     connection_pool.putconn(conn)
@@ -1079,6 +1096,30 @@ async def run_bot():
         .build()
     )
 
+    # Set up handlers
+    setup_handlers(app)
+
+    print("✅ Telegram bot is running...")
+    try:
+        await app.initialize()
+        await app.start()
+        await app.updater.start_polling()
+        
+        # Keep the bot running until interrupted
+        while True:
+            await asyncio.sleep(3600)  # Sleep for 1 hour
+    except asyncio.CancelledError:
+        pass
+    except KeyboardInterrupt:
+        print("\n🛑 Bot stopped by user")
+    finally:
+        await app.updater.stop()
+        await app.stop()
+        await app.shutdown()
+
+def setup_handlers(app):
+    """Configure all handlers"""
+    # Conversation handler without per_message=True
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("newresume", new_resume),
@@ -1093,9 +1134,10 @@ async def run_bot():
             SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
-        per_message=True,
+        # Removed per_message=True to avoid the warning
     )
 
+    # Add all handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("premium", premium_command))
     app.add_handler(CommandHandler("help", help_command))
@@ -1106,23 +1148,10 @@ async def run_bot():
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_error_handler(error_handler)
 
-    print("✅ Telegram bot is running...")
-    try:
-        await app.run_polling()
-    except asyncio.CancelledError:
-        pass
-    finally:
-        await app.shutdown()
-        
 if __name__ == "__main__":
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    
     try:
-        loop.run_until_complete(run_bot())
+        asyncio.run(run_bot())
     except KeyboardInterrupt:
         print("\n🛑 Bot stopped by user")
     except Exception as e:
         print(f"❌ Error running bot: {e}")
-    finally:
-        loop.close()
