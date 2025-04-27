@@ -112,15 +112,6 @@ def db_health_check():
         if conn:
             put_db_connection(conn)
             
-# Database connection helper
-def get_db_connection():
-    conn = None
-    try:
-        conn = psycopg2.connect(DATABASE_URL, sslmode='require')
-        return conn
-    except Exception as e:
-        print(f"⚠️ Failed to connect to database: {e}")
-        raise
     
 # Initialize database tables
 def init_db():
@@ -293,6 +284,14 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    
+        if query.data == "new_resume":
+        # Instead of calling new_resume directly, send /newresume command
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="/newresume"
+        )
+        return  # Don't continue
 
     handlers = {
         "new_resume": new_resume,
