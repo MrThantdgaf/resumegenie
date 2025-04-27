@@ -11,8 +11,6 @@ from concurrent.futures import ThreadPoolExecutor
 
 # Third-party imports
 import psycopg2
-from flask import Flask, request, jsonify
-from fpdf import FPDF
 from telegram import (
     Update,
     ReplyKeyboardMarkup,
@@ -31,7 +29,6 @@ from telegram.ext import (
     filters,
     CallbackQueryHandler,
 )
-
 from psycopg2.pool import SimpleConnectionPool
 
 # Local application imports
@@ -46,14 +43,9 @@ from premium_security import (
     REDEEM_COOLDOWN
 )
 
-# Initialize Flask app
-flask_app = Flask(__name__)
-
 # Global dictionary to store user data during the conversation
 user_data = {}
-
 redeem_attempts = {}
-
 
 # Define states for conversation as simple integers
 NAME, CONTACT, EDUCATION, EXPERIENCE, SKILLS, SUMMARY, TEMPLATE = range(7)
@@ -69,7 +61,6 @@ TEMPLATES = {
 # Fetch environment variables
 TOKEN = os.getenv("TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
-PORT = int(os.getenv("PORT", 10000))  # Default to 10000 if not set
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not TOKEN:
@@ -95,24 +86,6 @@ def get_db_connection():
 def put_db_connection(conn):
     connection_pool.putconn(conn)
 
-# Add Flask route for health check
-@flask_app.route('/')
-def health_check():
-    return jsonify({"status": "ok", "message": "ResumeGenie bot is running", "port": PORT})
-
-def db_health_check():
-    try:
-        conn = get_db_connection()
-        with conn.cursor() as cur:
-            cur.execute("SELECT 1")
-            return jsonify({"status": "ok", "database": "connected"})
-    except Exception as e:
-        return jsonify({"status": "error", "database": str(e)}), 500
-    finally:
-        if conn:
-            put_db_connection(conn)
-            
-    
 # Initialize database tables
 def init_db():
     commands = (
@@ -221,7 +194,6 @@ def is_premium(user_id):
             return False
     return False
 
-
 async def post_init(application):
     commands = [
         BotCommand("start", "Start the bot"),
@@ -229,13 +201,12 @@ async def post_init(application):
         BotCommand("premium", "Premium features info"),
         BotCommand("redeem", "Redeem premium key"),
         BotCommand("help", "Get help"),
-        BotCommand("privacy", "View privacy policy"),  # New command
+        BotCommand("privacy", "View privacy policy"),
         BotCommand("cancel", "Cancel current operation"),
     ]
     await application.bot.set_my_commands(commands)
     await application.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
     asyncio.create_task(security_monitor(application))
-
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
@@ -1063,6 +1034,8 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif update and update.callback_query:
         await update.callback_query.answer("❌ Error occurred. Please try again.", show_alert=True)
 
+
+
 async def security_monitor(context: ContextTypes.DEFAULT_TYPE):
     """Periodic security check"""
     while True:
@@ -1099,34 +1072,6 @@ async def shutdown(application):
     await application.stop()
     await application.shutdown()
 
-def stop_signal_handler(signum, frame):
-    """Handle stop signals"""
-    print("🚦 Received stop signal, shutting down...")
-    asyncio.create_task(shutdown(application))
-
-def run_flask():
-    from gunicorn.app.base import BaseApplication
-    
-    class FlaskApplication(BaseApplication):
-        def __init__(self, app, options=None):
-            self.application = app
-            self.options = options or {}
-            super().__init__()
-
-        def load_config(self):
-            for key, value in self.options.items():
-                self.cfg.set(key.lower(), value)
-
-        def load(self):
-            return self.application
-
-    options = {
-        'bind': f'0.0.0.0:{PORT}',
-        'workers': 4,
-        'threads': 2,
-    }
-    FlaskApplication(flask_app, options).run()
-
 async def run_bot():
     """Run the Telegram bot"""
     app = (
@@ -1150,7 +1095,7 @@ async def run_bot():
             SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
-        per_message=True,  # Changed to True to properly handle callbacks
+        per_message=True,
     )
 
     app.add_handler(CommandHandler("start", start))
@@ -1166,23 +1111,5 @@ async def run_bot():
     print("✅ Telegram bot is running...")
     await app.run_polling()
 
-async def main():
-    """Main async function to run both services"""
-    loop = asyncio.get_event_loop()
-    
-    # Run Flask in a separate thread
-    flask_thread = Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
-
-    # Run the bot in the main thread
-    await run_bot()
-
 if __name__ == "__main__":
-    import nest_asyncio
-    import asyncio
-
-    nest_asyncio.apply()
-
-    asyncio.run(main())
-
+    asyncio.run(run_bot())
