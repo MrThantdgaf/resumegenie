@@ -1184,13 +1184,5 @@ if __name__ == "__main__":
 
     nest_asyncio.apply()
 
-    from threading import Thread
-
-    # Start Flask server in another thread
-    flask_thread = Thread(target=lambda: flask_app.run(host="0.0.0.0", port=PORT))
-    flask_thread.daemon = True
-    flask_thread.start()
-
-    # Run bot properly
-    asyncio.run(run_bot())
+    asyncio.run(main())
 
