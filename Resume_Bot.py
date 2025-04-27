@@ -10,7 +10,6 @@ from datetime import datetime
 from threading import Thread
 
 # Third-party imports
-from flask import app
 import psycopg2
 from telegram import (
     Update,
@@ -93,9 +92,6 @@ async def db_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if conn:
             conn.close()
 
-# Add to setup_handlers:
-app.add_handler(CommandHandler("dbcheck", db_check))
-
 async def check_state(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     state = context.user_data.get('_conversation_state')
@@ -108,8 +104,6 @@ async def check_state(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(f"```\n{message}\n```", parse_mode="MarkdownV2")
 
-# Add to setup_handlers:
-app.add_handler(CommandHandler("state", check_state))
 
 # Initialize connection pool
 connection_pool = SimpleConnectionPool(
@@ -1164,7 +1158,7 @@ def setup_handlers(app):
         ],
     )
 
-    # Add handlers in the correct order
+    # Add all handlers
     app.add_handler(conv_handler)
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("premium", premium_command))
@@ -1172,6 +1166,8 @@ def setup_handlers(app):
     app.add_handler(CommandHandler("privacy", show_privacy_policy))
     app.add_handler(CommandHandler("generatekey", generate_key))
     app.add_handler(CommandHandler("redeem", redeem_key))
+    app.add_handler(CommandHandler("dbcheck", db_check))  # Moved here
+    app.add_handler(CommandHandler("state", check_state))  # Also move this one
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_error_handler(error_handler)
 
