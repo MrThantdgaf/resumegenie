@@ -10,6 +10,7 @@ from datetime import datetime
 from threading import Thread
 
 # Third-party imports
+from flask import app
 import psycopg2
 from telegram import (
     Update,
@@ -76,6 +77,40 @@ if not ADMIN_ID:
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL is missing.")
 
+async def db_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1")
+            result = cur.fetchone()
+            if result and result[0] == 1:
+                await update.message.reply_text("✅ Database connection is healthy")
+            else:
+                await update.message.reply_text("⚠️ Database connection test failed")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Database error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+# Add to setup_handlers:
+app.add_handler(CommandHandler("dbcheck", db_check))
+
+async def check_state(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    state = context.user_data.get('_conversation_state')
+    current_data = user_data.get(user_id, {})
+    
+    message = (
+        f"🔄 Current State: {state}\n"
+        f"📊 User Data: {json.dumps(current_data, indent=2)}"
+    )
+    
+    await update.message.reply_text(f"```\n{message}\n```", parse_mode="MarkdownV2")
+
+# Add to setup_handlers:
+app.add_handler(CommandHandler("state", check_state))
+
 # Initialize connection pool
 connection_pool = SimpleConnectionPool(
     minconn=1,
@@ -83,6 +118,7 @@ connection_pool = SimpleConnectionPool(
     dsn=DATABASE_URL,
     sslmode='require'
 )
+
 
 def get_db_connection():
     return connection_pool.getconn()
@@ -352,52 +388,73 @@ async def show_privacy_policy(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         
 async def new_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query if update.callback_query else None
-    user_id = update.effective_user.id
+    try:
+        query = update.callback_query if update.callback_query else None
+        user_id = update.effective_user.id
 
-    # Initialize user data
-    user_data[user_id] = {
-        "name": "",
-        "contact": "",
-        "education": "",
-        "experience": "",
-        "skills": "",
-        "summary": "",
-        "template": "BASIC",
-        "user_id": user_id,
-    }
+        # Initialize user data
+        user_data[user_id] = {
+            "name": "",
+            "contact": "",
+            "education": "",
+            "experience": "",
+            "skills": "",
+            "summary": "",
+            "template": "BASIC",
+            "user_id": user_id,
+        }
 
-    message = (
-        "📝 *Let's Create Your Professional Resume!*\n\n"
-        "We'll go through a few simple steps to build your perfect resume.\n\n"
-        "🔹 *Step 1 of 7*\n"
-        "What's your *full name*?\n\n"
-        "Example: *John Doe*"
-    )
-
-    if query:
-        await query.edit_message_text(message, parse_mode="Markdown", reply_markup=None)
-    else:
-        await update.message.reply_text(
-            message, parse_mode="Markdown", reply_markup=ReplyKeyboardRemove()
+        message = (
+            "📝 *Let's Create Your Professional Resume!*\n\n"
+            "We'll go through a few simple steps to build your perfect resume.\n\n"
+            "🔹 *Step 1 of 7*\n"
+            "What's your *full name*?\n\n"
+            "Example: *John Doe*"
         )
-    return NAME
+
+        if query:
+            await query.edit_message_text(message, parse_mode="Markdown", reply_markup=None)
+        else:
+            await update.message.reply_text(
+                message, 
+                parse_mode="Markdown", 
+                reply_markup=ReplyKeyboardRemove()
+            )
+            
+        # Log the start of resume creation
+        logger.info(f"Resume creation started for user {user_id}")
+        return NAME
+        
+    except Exception as e:
+        logger.error(f"Error in new_resume: {e}")
+        error_msg = "❌ Failed to start resume creation. Please try again."
+        if update.callback_query:
+            await update.callback_query.answer(error_msg, show_alert=True)
+        else:
+            await update.message.reply_text(error_msg)
+        return ConversationHandler.END
 
 
 async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    user_data[user_id]["name"] = update.message.text
+    try:
+        user_id = update.effective_user.id
+        user_data[user_id]["name"] = update.message.text
+        logger.info(f"User {user_id} provided name: {update.message.text}")
 
-    await update.message.reply_text(
-        "📞 *Step 2 of 7*\n"
-        "Please share your *contact information*:\n\n"
-        "Include any of these (separate with | ):\n"
-        "- Email\n- Phone\n- LinkedIn\n- Portfolio\n\n"
-        "Example:\n"
-        "*john@email.com | +123456789 | linkedin.com/in/john*",
-        parse_mode="Markdown",
-    )
-    return CONTACT
+        await update.message.reply_text(
+            "📞 *Step 2 of 7*\n"
+            "Please share your *contact information*:\n\n"
+            "Include any of these (separate with | ):\n"
+            "- Email\n- Phone\n- LinkedIn\n- Portfolio\n\n"
+            "Example:\n"
+            "*john@email.com | +123456789 | linkedin.com/in/john*",
+            parse_mode="Markdown",
+        )
+        return CONTACT
+    except Exception as e:
+        logger.error(f"Error in get_name: {e}")
+        await update.message.reply_text("❌ Error processing your name. Please try again.")
+        return ConversationHandler.END
 
 
 async def get_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1089,7 +1146,10 @@ def run_bot():
 def setup_handlers(app):
     """Configure all handlers"""
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("newresume", new_resume)],
+        entry_points=[
+            CommandHandler("newresume", new_resume),
+            CallbackQueryHandler(new_resume, pattern="^new_resume$")
+        ],
         states={
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
             CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_contact)],
@@ -1098,19 +1158,22 @@ def setup_handlers(app):
             SKILLS: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_skills)],
             SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_summary)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[
+            CommandHandler("cancel", cancel),
+            CommandHandler("start", start),
+        ],
     )
 
+    # Add handlers in the correct order
+    app.add_handler(conv_handler)
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("premium", premium_command))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("privacy", show_privacy_policy))
     app.add_handler(CommandHandler("generatekey", generate_key))
     app.add_handler(CommandHandler("redeem", redeem_key))
-    app.add_handler(conv_handler)
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_error_handler(error_handler)
-
 
 async def main():
     """Main async function to run the bot"""
