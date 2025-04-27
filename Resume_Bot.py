@@ -1097,14 +1097,22 @@ def setup_handlers(app):
     app.add_error_handler(error_handler)
 
 
-if __name__ == "__main__":
-    bot_thread = run_bot()
+async def main():
+    """Main async function to run the bot"""
+    app = ApplicationBuilder().token(TOKEN).post_init(post_init).build()
+    setup_handlers(app)
     
+    logger.info("✅ Starting Telegram bot...")
+    await app.run_polling()
+
+if __name__ == "__main__":
     try:
-        # Keep the main thread alive
-        while True:
-            time.sleep(1)
+        asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("Shutting down bot...")
-        # Proper cleanup would be needed here
-        pass
+        logger.info("Bot stopped by user")
+    except Exception as e:
+        logger.error(f"Bot crashed: {e}")
+    finally:
+        # Clean up database connections
+        connection_pool.closeall()
+        logger.info("✅ Cleanup complete. Exiting...")
