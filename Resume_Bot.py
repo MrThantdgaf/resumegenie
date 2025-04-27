@@ -635,7 +635,8 @@ async def generate_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-def generate_pdf_bytes(data):
+def generate_pdf_bytes(data, preview_mode=False):
+
     from fpdf import FPDF
 
     class PDF(FPDF):
@@ -651,7 +652,7 @@ def generate_pdf_bytes(data):
     template = data.get("template", "BASIC")
     user_id = data.get("user_id")
 
-    if template != "BASIC" and not is_premium(user_id):
+    if template != "BASIC" and not preview_mode and not is_premium(user_id):
         template = "BASIC"
 
     if template == "BASIC":
@@ -871,7 +872,7 @@ async def show_premium_features(update: Update, context: ContextTypes.DEFAULT_TY
     # Generate and send previews of premium templates
     for template in ["MODERN", "CREATIVE", "MINIMALIST"]:
         try:
-            pdf_bytes = generate_pdf_bytes({**example_data, "template": template})
+            pdf_bytes = generate_pdf_bytes({**example_data, "template": template}, preview_mode=True)
             await context.bot.send_document(
                 chat_id=update.effective_chat.id,
                 document=io.BytesIO(pdf_bytes),
@@ -879,6 +880,7 @@ async def show_premium_features(update: Update, context: ContextTypes.DEFAULT_TY
                 caption=f"Example: {TEMPLATES[template]}",
                 parse_mode="Markdown",
             )
+
         except Exception as e:
             print(f"Error generating {template} example: {e}")
             await context.bot.send_message(
