@@ -1,4 +1,5 @@
 # Standard library imports
+# Standard library imports
 import asyncio
 import io
 import os
@@ -14,8 +15,9 @@ from telegram import (
     Update,
     InlineKeyboardMarkup,
     InlineKeyboardButton,
-    BotCommand,  # Added BotCommand import
-    MenuButtonCommands,  # Added MenuButtonCommands import
+    BotCommand,
+    MenuButtonCommands,
+    ReplyKeyboardRemove  # Moved here from telegram.ext
 )
 from telegram.ext import (
     ApplicationBuilder,
@@ -25,21 +27,8 @@ from telegram.ext import (
     ConversationHandler,
     filters,
     CallbackQueryHandler,
-    ReplyKeyboardRemove,  # Added ReplyKeyboardRemove import
 )
 from psycopg2.pool import SimpleConnectionPool
-
-# Local application imports
-from premium_security import (
-    generate_secure_key,
-    validate_key_format,
-    verify_key_signature,
-    check_rate_limit,
-    record_attempt,
-    log_security_event,
-    MAX_REDEEM_ATTEMPTS,
-    REDEEM_COOLDOWN
-)
 
 # Configure logging
 logging.basicConfig(
@@ -153,8 +142,8 @@ def save_db(data):
                 UPDATE premium_data 
                 SET keys = %s, premium_users = %s
                 WHERE id = 1
-            """), (json.dumps(data.get("keys", {})), 
-                  json.dumps(data.get("premium_users", {})))
+            """, (json.dumps(data.get("keys", {})), 
+                json.dumps(data.get("premium_users", {}))))
             conn.commit()
     except Exception as e:
         logger.error(f"DB Save Error: {e}")
