@@ -1150,34 +1150,37 @@ async def main():
         connection_pool.closeall()
         logger.info("✅ Cleanup complete. Exiting...")
 
+import platform
+
 if __name__ == "__main__":
     try:
-        # Create new event loop for Python 3.11+
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        
-        # Run the main coroutine
+
         main_task = loop.create_task(main())
-        
-        # Handle shutdown signals
+
         def shutdown_handler():
             logger.info("Signal received, initiating shutdown...")
             main_task.cancel()
-            
-        for sig in (signal.SIGTERM, signal.SIGINT):
-            loop.add_signal_handler(sig, shutdown_handler)
-            
+
+        if platform.system() != "Windows":
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                loop.add_signal_handler(sig, shutdown_handler)
+        else:
+            logger.warning("Signal handlers are not supported on Windows. Skipping...")
+
         loop.run_forever()
-        
+
     except KeyboardInterrupt:
         logger.info("Keyboard interrupt received")
     except Exception as e:
-        logger.error(f"Bot crashed: {e}")
+        import traceback
+        logger.error("Bot crashed:\n%s", traceback.format_exc())
     finally:
         tasks = asyncio.all_tasks(loop)
         for task in tasks:
             task.cancel()
-        
+
         loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
         loop.close()
-        logger.info("✅ Fully shut down")
+        logger.info("✅ Fully shut down")                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
