@@ -8,6 +8,8 @@ import time
 import logging
 from datetime import datetime
 from threading import Thread
+from dotenv import load_dotenv
+load_dotenv()  # Load environment variables from .env file
 
 # Third-party imports
 import psycopg2
