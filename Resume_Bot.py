@@ -61,6 +61,8 @@ async def run_webserver():
     site = web.TCPSite(runner, '0.0.0.0', int(os.environ.get('PORT', 8080)))
     await site.start()
     print("Web server started")
+    while True:
+        await asyncio.sleep(3600)  # Keep the server running
     
 # Configure logging
 logging.basicConfig(
@@ -1162,36 +1164,28 @@ async def main():
         await asyncio.sleep(3600)
 
 if __name__ == "__main__":
+    # Start both web server and bot in the same event loop
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
     try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-        main_task = loop.create_task(main())
-
-        def shutdown_handler():
-            logger.info("Signal received, initiating shutdown...")
-            main_task.cancel()
-
-        if platform.system() != "Windows":
-            for sig in (signal.SIGTERM, signal.SIGINT):
-                loop.add_signal_handler(sig, shutdown_handler)
-        else:
-            logger.warning("Signal handlers are not supported on Windows. Skipping...")
-
-        loop.run_forever()
-
-    except KeyboardInterrupt:
-        logger.info("Keyboard interrupt received")
-    except Exception as e:
-        import traceback
-        logger.error("Bot crashed:\n%s", traceback.format_exc())
-    finally:
-        tasks = asyncio.all_tasks(loop)
-        for task in tasks:
-            task.cancel()
-
-        loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
-        loop.close()
-        logger.info("✅ Fully shut down")          
+        # Create application instance
+        app = ApplicationBuilder().token(TOKEN).post_init(post_init).build()
+        setup_handlers(app)
         
-        #note need ot set up port binding for the bot to work on render.com                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
+        # Create tasks
+        tasks = [
+            app.run_polling(),
+            run_webserver(),
+        ]
+        
+        # Run both tasks concurrently
+        loop.run_until_complete(asyncio.gather(*tasks))
+        
+    except KeyboardInterrupt:
+        pass
+    finally:
+        loop.run_until_complete(shutdown(app))
+        loop.close()
+        logger.info("✅ Fully shut down")      
+    
