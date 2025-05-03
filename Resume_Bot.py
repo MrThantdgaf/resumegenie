@@ -44,6 +44,22 @@ from premium_security import (
     REDEEM_COOLDOWN
 )
 
+# Add at the top with other imports
+from aiohttp import web
+
+# Add after connection_pool initialization
+async def health_check(request):
+    return web.Response(text="Bot is running")
+
+async def run_webserver():
+    app = web.Application()
+    app.router.add_get('/', health_check)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', int(os.environ.get('PORT', 8080)))
+    await site.start()
+    print("Web server started")
+
 # Configure logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -1152,37 +1168,21 @@ async def main():
 
 import platform
 
-if __name__ == "__main__":
-    try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-        main_task = loop.create_task(main())
-
-        def shutdown_handler():
-            logger.info("Signal received, initiating shutdown...")
-            main_task.cancel()
-
-        if platform.system() != "Windows":
-            for sig in (signal.SIGTERM, signal.SIGINT):
-                loop.add_signal_handler(sig, shutdown_handler)
-        else:
-            logger.warning("Signal handlers are not supported on Windows. Skipping...")
-
-        loop.run_forever()
-
-    except KeyboardInterrupt:
-        logger.info("Keyboard interrupt received")
-    except Exception as e:
-        import traceback
-        logger.error("Bot crashed:\n%s", traceback.format_exc())
-    finally:
-        tasks = asyncio.all_tasks(loop)
-        for task in tasks:
-            task.cancel()
-
-        loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
-        loop.close()
-        logger.info("✅ Fully shut down")          
-        
-        #note need ot set up port binding for the bot to work on render.com                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
+async def main():
+    # Start web server
+    asyncio.create_task(run_webserver())
+    
+    # Start Telegram bot
+    app = ApplicationBuilder().token(TOKEN).post_init(post_init).build()
+    setup_handlers(app)
+    
+    logger.info("✅ Starting services...")
+    await app.initialize()
+    await app.start()
+    
+    if app.updater:
+        await app.updater.start_polling()
+    
+    # Keep running
+    while True:
+        await asyncio.sleep(3600) 
