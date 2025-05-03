@@ -248,12 +248,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     if query.data == "new_resume":
-        # Instead of calling new_resume directly, send /newresume command
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text="/newresume"
-        )
-        return  # Don't continue
+        await new_resume(update, context)
 
     handlers = {
         "new_resume": new_resume,
@@ -1026,7 +1021,10 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id in user_data:
         del user_data[user_id]
-
+    
+    # Clear conversation state
+    context.user_data.clear()
+    
     await update.message.reply_text(
         "🚫 Operation cancelled. Your progress has been cleared.",
         reply_markup=ReplyKeyboardRemove(),
@@ -1131,7 +1129,7 @@ def setup_handlers(app):
             CommandHandler("cancel", cancel),
             CommandHandler("start", start),
         ],
-    )
+        per_message=True)
 
     # Add all handlers
     app.add_handler(conv_handler)
@@ -1165,22 +1163,22 @@ async def main():
     while True:
         await asyncio.sleep(3600)
 
-# Modify the main execution block
 if __name__ == "__main__":
-    # Create application instance
     application = ApplicationBuilder().token(TOKEN).post_init(post_init).build()
     setup_handlers(application)
     
-    # Create event loop
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
     try:
-        # FIRST start webserver
-        loop.run_until_complete(run_webserver())
+        # Create tasks
+        tasks = [
+            application.run_polling(),
+            run_webserver(),
+        ]
         
-        # THEN start bot polling in async mode
-        application.run_polling()
+        # Run both tasks concurrently
+        loop.run_until_complete(asyncio.gather(*tasks))
         
     except KeyboardInterrupt:
         pass
