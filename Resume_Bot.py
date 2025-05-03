@@ -58,11 +58,13 @@ async def run_webserver():
     app.router.add_get('/', health_check)
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', int(os.environ.get('PORT', 8080)))
+    port = int(os.environ.get('PORT', 8080))
+    site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
-    print("Web server started")
+    logger.info(f"Web server started on port {port}")
+    # Remove the infinite sleep, keep the server running
     while True:
-        await asyncio.sleep(3600)  # Keep the server running
+        await asyncio.sleep(3600)
     
 # Configure logging
 logging.basicConfig(
@@ -1164,18 +1166,18 @@ async def main():
         await asyncio.sleep(3600)
 
 if __name__ == "__main__":
-    # Start both web server and bot in the same event loop
+    # Create application instance
+    application = ApplicationBuilder().token(TOKEN).post_init(post_init).build()
+    setup_handlers(application)
+    
+    # Create event loop
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
     try:
-        # Create application instance
-        app = ApplicationBuilder().token(TOKEN).post_init(post_init).build()
-        setup_handlers(app)
-        
         # Create tasks
         tasks = [
-            app.run_polling(),
+            application.run_polling(),
             run_webserver(),
         ]
         
@@ -1185,7 +1187,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         pass
     finally:
-        loop.run_until_complete(shutdown(app))
+        loop.run_until_complete(shutdown(application))
         loop.close()
-        logger.info("✅ Fully shut down")      
-    
+        logger.info("✅ Fully shut down")
