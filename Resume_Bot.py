@@ -58,13 +58,9 @@ async def run_webserver():
     app.router.add_get('/', health_check)
     runner = web.AppRunner(app)
     await runner.setup()
-    port = int(os.environ.get('PORT', 8080))
-    site = web.TCPSite(runner, '0.0.0.0', port)
+    site = web.TCPSite(runner, '0.0.0.0', int(os.environ.get('PORT', 8080)))
     await site.start()
-    logger.info(f"Web server started on port {port}")
-    # Remove the infinite sleep, keep the server running
-    while True:
-        await asyncio.sleep(3600)
+    print("Web server started")
     
 # Configure logging
 logging.basicConfig(
@@ -248,17 +244,24 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     if query.data == "new_resume":
-        await new_resume(update, context)
-    elif query.data == "premium_features":
-        await show_premium_features(update, context)
-    elif query.data == "show_help":
-        await show_help(update, context)
-    elif query.data == "back_to_main":
-        await start(update, context)
-    elif query.data == "get_premium":
-        await get_premium(update, context)
-    elif query.data == "privacy_policy":
-        await show_privacy_policy(update, context)
+        # Instead of calling new_resume directly, send /newresume command
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="/newresume"
+        )
+        return  # Don't continue
+
+    handlers = {
+        "new_resume": new_resume,
+        "premium_features": show_premium_features,
+        "show_help": show_help,
+        "back_to_main": start,
+        "get_premium": get_premium,
+        "privacy_policy": show_privacy_policy,  # New handler
+    }
+
+    if query.data in handlers:
+        await handlers[query.data](update, context)
     elif query.data.startswith("template_"):
         template = query.data.split("_")[1]
         user_id = query.from_user.id
@@ -1019,10 +1022,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id in user_data:
         del user_data[user_id]
-    
-    # Clear conversation state
-    context.user_data.clear()
-    
+
     await update.message.reply_text(
         "🚫 Operation cancelled. Your progress has been cleared.",
         reply_markup=ReplyKeyboardRemove(),
@@ -1127,9 +1127,7 @@ def setup_handlers(app):
             CommandHandler("cancel", cancel),
             CommandHandler("start", start),
         ],
-        per_message=True,
-        per_user=True
-        )
+    )
 
     # Add all handlers
     app.add_handler(conv_handler)
@@ -1163,26 +1161,37 @@ async def main():
     while True:
         await asyncio.sleep(3600)
 
-# Modify the main execution block at the end of the file
 if __name__ == "__main__":
-    # Create application instance once
-    application = ApplicationBuilder().token(TOKEN).post_init(post_init).build()
-    setup_handlers(application)
-
-    # Create unified event loop
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
     try:
-        # Start services in correct order
-        loop.run_until_complete(run_webserver())
-        loop.create_task(application.run_polling())
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        main_task = loop.create_task(main())
+
+        def shutdown_handler():
+            logger.info("Signal received, initiating shutdown...")
+            main_task.cancel()
+
+        if platform.system() != "Windows":
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                loop.add_signal_handler(sig, shutdown_handler)
+        else:
+            logger.warning("Signal handlers are not supported on Windows. Skipping...")
+
         loop.run_forever()
 
     except KeyboardInterrupt:
-        pass
+        logger.info("Keyboard interrupt received")
+    except Exception as e:
+        import traceback
+        logger.error("Bot crashed:\n%s", traceback.format_exc())
     finally:
-        # Proper shutdown sequence
-        loop.run_until_complete(shutdown(application))
+        tasks = asyncio.all_tasks(loop)
+        for task in tasks:
+            task.cancel()
+
+        loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
         loop.close()
-        logger.info("✅ Fully shut down")
+        logger.info("✅ Fully shut down")          
+        
+                        
