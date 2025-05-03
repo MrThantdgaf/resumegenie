@@ -44,6 +44,8 @@ from premium_security import (
     REDEEM_COOLDOWN
 )
 
+import platform
+
 # Add at the top with other imports
 from aiohttp import web
 
@@ -59,7 +61,7 @@ async def run_webserver():
     site = web.TCPSite(runner, '0.0.0.0', int(os.environ.get('PORT', 8080)))
     await site.start()
     print("Web server started")
-
+    
 # Configure logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -1141,34 +1143,6 @@ def setup_handlers(app):
     app.add_error_handler(error_handler)
 
 async def main():
-    """Main async function to run the bot"""
-    app = ApplicationBuilder().token(TOKEN).post_init(post_init).build()
-    setup_handlers(app)
-    
-    logger.info("✅ Starting Telegram bot...")
-    
-    try:
-        await app.initialize()
-        await app.start()
-        await app.updater.start_polling()  # Only if using polling
-        
-        # Keep the bot running until stopped
-        while True:
-            await asyncio.sleep(3600)  # Sleep for 1 hour and repeat
-            
-    except asyncio.CancelledError:
-        logger.info("Shutdown signal received...")
-    finally:
-        logger.info("Shutting down gracefully...")
-        await app.updater.stop()  # Only if using polling
-        await app.stop()
-        await app.shutdown()
-        connection_pool.closeall()
-        logger.info("✅ Cleanup complete. Exiting...")
-
-import platform
-
-async def main():
     # Start web server
     asyncio.create_task(run_webserver())
     
@@ -1185,4 +1159,39 @@ async def main():
     
     # Keep running
     while True:
-        await asyncio.sleep(3600) 
+        await asyncio.sleep(3600)
+
+if __name__ == "__main__":
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        main_task = loop.create_task(main())
+
+        def shutdown_handler():
+            logger.info("Signal received, initiating shutdown...")
+            main_task.cancel()
+
+        if platform.system() != "Windows":
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                loop.add_signal_handler(sig, shutdown_handler)
+        else:
+            logger.warning("Signal handlers are not supported on Windows. Skipping...")
+
+        loop.run_forever()
+
+    except KeyboardInterrupt:
+        logger.info("Keyboard interrupt received")
+    except Exception as e:
+        import traceback
+        logger.error("Bot crashed:\n%s", traceback.format_exc())
+    finally:
+        tasks = asyncio.all_tasks(loop)
+        for task in tasks:
+            task.cancel()
+
+        loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
+        loop.close()
+        logger.info("✅ Fully shut down")          
+        
+        #note need ot set up port binding for the bot to work on render.com                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
