@@ -1165,6 +1165,7 @@ async def main():
     while True:
         await asyncio.sleep(3600)
 
+# Modify the main execution block
 if __name__ == "__main__":
     # Create application instance
     application = ApplicationBuilder().token(TOKEN).post_init(post_init).build()
@@ -1175,14 +1176,11 @@ if __name__ == "__main__":
     asyncio.set_event_loop(loop)
     
     try:
-        # Create tasks
-        tasks = [
-            application.run_polling(),
-            run_webserver(),
-        ]
+        # FIRST start webserver
+        loop.run_until_complete(run_webserver())
         
-        # Run both tasks concurrently
-        loop.run_until_complete(asyncio.gather(*tasks))
+        # THEN start bot polling in async mode
+        application.run_polling()
         
     except KeyboardInterrupt:
         pass
