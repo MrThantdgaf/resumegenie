@@ -249,18 +249,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if query.data == "new_resume":
         await new_resume(update, context)
-
-    handlers = {
-        "new_resume": new_resume,
-        "premium_features": show_premium_features,
-        "show_help": show_help,
-        "back_to_main": start,
-        "get_premium": get_premium,
-        "privacy_policy": show_privacy_policy,  # New handler
-    }
-
-    if query.data in handlers:
-        await handlers[query.data](update, context)
+    elif query.data == "premium_features":
+        await show_premium_features(update, context)
+    elif query.data == "show_help":
+        await show_help(update, context)
+    elif query.data == "back_to_main":
+        await start(update, context)
+    elif query.data == "get_premium":
+        await get_premium(update, context)
+    elif query.data == "privacy_policy":
+        await show_privacy_policy(update, context)
     elif query.data.startswith("template_"):
         template = query.data.split("_")[1]
         user_id = query.from_user.id
@@ -1129,7 +1127,9 @@ def setup_handlers(app):
             CommandHandler("cancel", cancel),
             CommandHandler("start", start),
         ],
-        per_message=True)
+        per_message=True,
+        per_user=True
+        )
 
     # Add all handlers
     app.add_handler(conv_handler)
@@ -1163,26 +1163,26 @@ async def main():
     while True:
         await asyncio.sleep(3600)
 
+# Modify the main execution block at the end of the file
 if __name__ == "__main__":
+    # Create application instance once
     application = ApplicationBuilder().token(TOKEN).post_init(post_init).build()
     setup_handlers(application)
-    
+
+    # Create unified event loop
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    
+
     try:
-        # Create tasks
-        tasks = [
-            application.run_polling(),
-            run_webserver(),
-        ]
-        
-        # Run both tasks concurrently
-        loop.run_until_complete(asyncio.gather(*tasks))
-        
+        # Start services in correct order
+        loop.run_until_complete(run_webserver())
+        loop.create_task(application.run_polling())
+        loop.run_forever()
+
     except KeyboardInterrupt:
         pass
     finally:
+        # Proper shutdown sequence
         loop.run_until_complete(shutdown(application))
         loop.close()
         logger.info("✅ Fully shut down")
