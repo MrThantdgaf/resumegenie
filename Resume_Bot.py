@@ -97,6 +97,13 @@ if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL is missing.")
 
 async def db_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Admin-only guard
+    if str(update.effective_user.id) != ADMIN_ID:
+        await update.message.reply_text("❌ You’re not allowed to use this command.")
+        return
+
+    # Existing logic
+    conn = None
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
@@ -107,22 +114,36 @@ async def db_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await update.message.reply_text("⚠️ Database connection test failed")
     except Exception as e:
-        await update.message.reply_text(f"❌ Database error: {str(e)}")
+        await update.message.reply_text(f"❌ Database error: {e}")
     finally:
         if conn:
             put_db_connection(conn)
 
+
 async def check_state(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Admin-only guard
+    if str(update.effective_user.id) != ADMIN_ID:
+        # use callback_query if coming from a button
+        if update.callback_query:
+            await update.callback_query.answer("❌ You’re not allowed to use this command.", show_alert=True)
+        else:
+            await update.message.reply_text("❌ You’re not allowed to use this command.")
+        return
+
     user_id = update.effective_user.id
     state = context.user_data.get('_conversation_state')
     current_data = user_data.get(user_id, {})
-    
+
     message = (
         f"🔄 Current State: {state}\n"
         f"📊 User Data: {json.dumps(current_data, indent=2)}"
     )
-    
-    await update.message.reply_text(f"```\n{message}\n```", parse_mode="MarkdownV2")
+    if update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.edit_message_text(f"```{message}```", parse_mode="MarkdownV2")
+    else:
+        await update.message.reply_text(f"```{message}```", parse_mode="MarkdownV2")
+
 
 
 # Initialize connection pool
