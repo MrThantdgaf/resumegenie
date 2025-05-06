@@ -1175,8 +1175,34 @@ def setup_handlers(app):
     app.add_handler(CommandHandler("redeem", redeem_key))
     app.add_handler(CommandHandler("dbcheck", db_check))
     app.add_handler(CommandHandler("state", check_state))
-    app.add_handler(CommandHandler("cancel", cancel))  # Explicit cancel handler
-    
+    app.add_handler(CommandHandler("cancel", cancel))
+    # Explicit cancel handler
+    # Only ADMIN_ID can call /dbcheck
+    app.add_handler(
+        CommandHandler(
+            "dbcheck",
+            db_check,
+            filters=filters.User(user_id=int(ADMIN_ID))
+        )
+    )
+
+    # Only ADMIN_ID can call /state
+    app.add_handler(
+        CommandHandler(
+            "state",
+            check_state,
+            filters=filters.User(user_id=int(ADMIN_ID))
+        )
+    )
+    app.add_handler(
+        CommandHandler(
+            "generatekey",
+            generate_key,
+            filters=filters.User(user_id=int(ADMIN_ID))
+        )
+    )
+
+
     # Add conversation handler
     app.add_handler(conv_handler)
     
