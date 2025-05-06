@@ -305,13 +305,18 @@ async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 Need more help? Contact @techadmin009
 """
-
     keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="back_to_main")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
-    query = update.callback_query
-    await query.edit_message_text(
-        help_text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    if update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.edit_message_text(help_text,
+                                                     parse_mode="Markdown",
+                                                     reply_markup=reply_markup)
+    else:
+        await update.message.reply_text(help_text,
+                                        parse_mode="Markdown",
+                                        reply_markup=reply_markup)
 
 async def show_privacy_policy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -751,44 +756,49 @@ def generate_pdf_bytes(data, preview_mode=False):
 
 async def show_premium_features(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"Premium command triggered by {update.effective_user.id}")
-    query = update.callback_query
     premium_text = """
-    💎 *Premium Features* 💎
+💎 *Premium Features* 💎
 
-    ✨ *Professional Templates*
-    - Modern, Creative, and Minimalist designs
-    - ATS-friendly formats
-    - Custom color schemes
+✨ *Professional Templates*
+- Modern, Creative, and Minimalist designs
+- ATS-friendly formats
+- Custom color schemes
 
-    🔓 *Unlimited Access*
-    - No restrictions on resume saves
-    - Edit existing resumes anytime
-    - No watermarks on your resumes
+🔓 *Unlimited Access*
+- No restrictions on resume saves
+- Edit existing resumes anytime
+- No watermarks on your resumes
 
-    ⚡ *Priority Features*
-    - Faster processing
-    - Priority support
-    - Regular template updates
+⚡ *Priority Features*
+- Faster processing
+- Priority support
+- Regular template updates
 
-    💰 *Pricing Plans*
-    - 1 month: 19,000 MMK
-    - 3 months: 50,000 MMK (15% off)
-    - 1 year: 159,600 MMK (30% off)
+💰 *Pricing Plans*
+- 1 month: 19,000 MMK
+- 3 months: 50,000 MMK (15% off)
+- 1 year: 159,600 MMK (30% off)
 
-    🔑 To activate premium:
-    1. Contact @techadmin009
-    2. Get your premium key
-    3. Use /redeem <key>
-    """
-
+🔑 To activate premium:
+1. Contact @techadmin009
+2. Get your premium key
+3. Use /redeem <key>
+"""
     keyboard = [
         [InlineKeyboardButton("🛒 Get Premium", callback_data="get_premium")],
         [InlineKeyboardButton("⬅️ Back", callback_data="back_to_main")],
     ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
-    await query.edit_message_text(
-        premium_text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    if update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.edit_message_text(premium_text,
+                                                     parse_mode="Markdown",
+                                                     reply_markup=reply_markup)
+    else:
+        await update.message.reply_text(premium_text,
+                                        parse_mode="Markdown",
+                                        reply_markup=reply_markup)
 
     # Send example premium templates
     example_data = {
