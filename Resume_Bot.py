@@ -202,6 +202,9 @@ async def post_init(application):
     await application.bot.set_my_commands(commands)
     await application.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
     asyncio.create_task(security_monitor(application))
+    
+    commands = await application.bot.get_my_commands()
+    logger.info(f"Bot commands registered: {commands}")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
@@ -276,6 +279,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info(f"Help command triggered by {update.effective_user.id}")
     help_text = """
 📝 *ResumeGenie Pro Help Guide* 📝
 
@@ -746,6 +750,7 @@ def generate_pdf_bytes(data, preview_mode=False):
 
 
 async def show_premium_features(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info(f"Premium command triggered by {update.effective_user.id}")
     query = update.callback_query
     premium_text = """
     💎 *Premium Features* 💎
@@ -1110,6 +1115,7 @@ def run_bot():
 
 def setup_handlers(app):
     """Configure all handlers"""
+    # Conversation handler first
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("newresume", new_resume),
@@ -1129,19 +1135,26 @@ def setup_handlers(app):
         ],
     )
 
-    # Add all handlers
-    app.add_handler(conv_handler)
+    # Add all handlers in order of priority
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("premium", show_premium_features))
     app.add_handler(CommandHandler("help", show_help))
+    app.add_handler(CommandHandler("premium", show_premium_features))
     app.add_handler(CommandHandler("privacy", show_privacy_policy))
     app.add_handler(CommandHandler("generatekey", generate_key))
     app.add_handler(CommandHandler("redeem", redeem_key))
-    app.add_handler(CommandHandler("dbcheck", db_check))  # Moved here
-    app.add_handler(CommandHandler("state", check_state))  # Also move this one
+    app.add_handler(CommandHandler("dbcheck", db_check))
+    app.add_handler(CommandHandler("state", check_state))
+    app.add_handler(CommandHandler("cancel", cancel))  # Explicit cancel handler
+    
+    # Add conversation handler
+    app.add_handler(conv_handler)
+    
+    # Callback query handler should come after command handlers
     app.add_handler(CallbackQueryHandler(button_handler))
+    
+    # Error handler last
     app.add_error_handler(error_handler)
-
+    
 async def main():
     # Start web server
     asyncio.create_task(run_webserver())
