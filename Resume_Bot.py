@@ -324,7 +324,7 @@ async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /redeem - Activate premium
 /cancel - Cancel current operation
 
-Need more help? Contact @techadmin009
+Need more help? Contact @ThantLwinMaung
 """
     keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="back_to_main")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -801,7 +801,7 @@ async def show_premium_features(update: Update, context: ContextTypes.DEFAULT_TY
 - 1 year: 159,600 MMK (30% off)
 
 🔑 To activate premium:
-1. Contact @techadmin009
+1. Contact @ThantLwinMaung
 2. Get your premium key
 3. Use /redeem <key>
 """
@@ -891,7 +891,7 @@ async def show_premium_features(update: Update, context: ContextTypes.DEFAULT_TY
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text="🔓 *Upgrade to premium* to use these beautiful templates!\n\n"
-            "Use /redeem with your premium key or contact @techadmin009 to get started.",
+            "Use /redeem with your premium key or contact @ThantLwinMaung to get started.",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
@@ -899,7 +899,7 @@ async def show_premium_features(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def get_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    contact_admin = "📩 Contact @techadmin009 to get your premium key!"
+    contact_admin = "📩 Contact @ThantLwinMaung to get your premium key!"
 
     keyboard = [
         [InlineKeyboardButton("💎 Premium Features", callback_data="premium_features")],
@@ -967,7 +967,7 @@ async def redeem_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args or len(context.args) != 1:
         record_attempt(user_id, False)
         await update.message.reply_text(
-            "Usage: `/redeem YOUR_KEY`\n\nContact @techadmin009 to get a premium key.",
+            "Usage: `/redeem YOUR_KEY`\n\nContact @ThantLwinMaung to get a premium key.",
             parse_mode="Markdown",
         )
         return
