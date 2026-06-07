@@ -2,6 +2,11 @@
 
 **Resume Genie** is a Telegram bot designed to help users effortlessly generate professional resumes in PDF format. It guides users through a short Q&A flow and automatically creates a resume using the provided information.
 
+<p align="center">
+  <strong style="color: #30ff30;">Try ResumeGenie Telegram Bot</strong>
+  <a href="https://t.me/buildmyresumebot" style="color: #2CA5E0; text-decoration: none;">>> Click Here <<</a>
+</p>
+
 ## Features
 
 ### Easy to Use
