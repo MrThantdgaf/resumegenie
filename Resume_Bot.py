@@ -558,7 +558,8 @@ async def get_summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Generate and send previews
         for template in TEMPLATES.keys():
             try:
-                pdf_bytes = generate_pdf_bytes({**example_data, "template": template})
+                loop = asyncio.get_running_loop()
+                pdf_bytes = await loop.run_in_executor(None, generate_pdf_bytes, {**example_data, "template": template})
                 await context.bot.send_document(
                     chat_id=update.effective_chat.id,
                     document=io.BytesIO(pdf_bytes),
@@ -604,10 +605,12 @@ async def generate_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.reply_text("❌ Error: Resume data not found. Please start again.")
         return ConversationHandler.END
 
-    # Generate PDF
+    # Generate PDF in a thread pool to avoid blocking the async event loop
     try:
-        pdf_bytes = generate_pdf_bytes(user_data[user_id])
+        loop = asyncio.get_running_loop()
+        pdf_bytes = await loop.run_in_executor(None, generate_pdf_bytes, user_data[user_id])
     except Exception as e:
+        logger.error(f"PDF generation error: {e}")
         await message.reply_text("❌ Error generating resume. Please try again.")
         return ConversationHandler.END
 
@@ -869,7 +872,8 @@ async def show_premium_features(update: Update, context: ContextTypes.DEFAULT_TY
     # Generate and send previews of premium templates
     for template in ["MODERN", "CREATIVE", "MINIMALIST"]:
         try:
-            pdf_bytes = generate_pdf_bytes({**example_data, "template": template}, preview_mode=True)
+            loop = asyncio.get_running_loop()
+            pdf_bytes = await loop.run_in_executor(None, generate_pdf_bytes, {**example_data, "template": template}, preview_mode=True)
             await context.bot.send_document(
                 chat_id=update.effective_chat.id,
                 document=io.BytesIO(pdf_bytes),
@@ -1216,8 +1220,17 @@ async def main():
     # Start web server
     asyncio.create_task(run_webserver())
     
-    # Start Telegram bot
-    app = ApplicationBuilder().token(TOKEN).post_init(post_init).build()
+    # Start Telegram bot with longer timeouts for PDF generation
+    app = (
+        ApplicationBuilder()
+        .token(TOKEN)
+        .post_init(post_init)
+        .read_timeout(30)
+        .write_timeout(30)
+        .connect_timeout(30)
+        .pool_timeout(30)
+        .build()
+    )
     setup_handlers(app)
     
     logger.info("✅ Starting services...")
