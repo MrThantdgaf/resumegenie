@@ -296,7 +296,23 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
             f"✅ Selected template: *{TEMPLATES[template]}*", parse_mode="Markdown"
         )
+        # Run PDF generation as a background task to prevent callback query timeout
+        asyncio.create_task(_generate_resume_background(update, context))
+
+
+async def _generate_resume_background(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Background wrapper for generate_resume to prevent callback query timeout."""
+    try:
         await generate_resume(update, context)
+    except Exception as e:
+        logger.error(f"Background resume generation error: {e}")
+        try:
+            if update.callback_query:
+                await update.callback_query.message.reply_text(
+                    "❌ Error generating your resume. Please try again."
+                )
+        except Exception:
+            pass
 
 
 async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -593,7 +609,7 @@ async def get_summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def generate_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.callback_query:
         query = update.callback_query
-        await query.answer()
+        # Note: query.answer() is already called by button_handler for template callbacks
         message = query.message
         user_id = query.from_user.id
     else:
