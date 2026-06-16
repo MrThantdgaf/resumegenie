@@ -315,6 +315,85 @@ async def _generate_resume_background(update: Update, context: ContextTypes.DEFA
             pass
 
 
+async def _send_previews_background(context, example_data, chat_id):
+    """Generate and send all 4 template previews in parallel as a background task."""
+    try:
+        loop = asyncio.get_running_loop()
+
+        async def generate_and_send(template_name):
+            try:
+                pdf_bytes = await loop.run_in_executor(
+                    None, generate_pdf_bytes, {**example_data, "template": template_name}, True
+                )
+                await context.bot.send_document(
+                    chat_id=chat_id,
+                    document=io.BytesIO(pdf_bytes),
+                    filename=f"{template_name}_preview.pdf",
+                    caption=f"Preview: {TEMPLATES[template_name]}",
+                )
+            except Exception as e:
+                logger.error(f"Error generating {template_name} preview: {e}")
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"⚠️ Couldn't generate {template_name} preview.",
+                )
+
+        # Generate all 4 previews in parallel for speed
+        await asyncio.gather(*[
+            generate_and_send(t) for t in TEMPLATES.keys()
+        ])
+    except Exception as e:
+        logger.error(f"Preview background task error: {e}")
+
+
+async def _send_premium_previews_background(context, example_data, chat_id, keyboard):
+    """Generate and send premium template examples in background."""
+    try:
+        loop = asyncio.get_running_loop()
+
+        # Send loading message
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="🔄 Preparing premium template examples...",
+            parse_mode="Markdown",
+        )
+
+        async def generate_and_send(template_name):
+            try:
+                pdf_bytes = await loop.run_in_executor(
+                    None, generate_pdf_bytes, {**example_data, "template": template_name}, True
+                )
+                await context.bot.send_document(
+                    chat_id=chat_id,
+                    document=io.BytesIO(pdf_bytes),
+                    filename=f"{template_name}_example.pdf",
+                    caption=f"Example: {TEMPLATES[template_name]}",
+                    parse_mode="Markdown",
+                )
+            except Exception as e:
+                logger.error(f"Error generating {template_name} example: {e}")
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"⚠️ Couldn't generate {template_name} example.",
+                )
+
+        # Generate all 3 premium previews in parallel
+        await asyncio.gather(*[
+            generate_and_send(t) for t in ["MODERN", "CREATIVE", "MINIMALIST"]
+        ])
+
+        # Add reminder for non-premium users
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="🔓 *Upgrade to premium* to use these beautiful templates!\n\n"
+            "Use /redeem with your premium key or contact @ThantLwinMaung to get started.",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+    except Exception as e:
+        logger.error(f"Premium previews background task error: {e}")
+
+
 async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"Help command triggered by {update.effective_user.id}")
     help_text = """
@@ -571,30 +650,20 @@ async def get_summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("✂️ Minimalist", callback_data="template_MINIMALIST")],
         ]
 
-        # Generate and send previews
-        for template in TEMPLATES.keys():
-            try:
-                loop = asyncio.get_running_loop()
-                pdf_bytes = await loop.run_in_executor(None, generate_pdf_bytes, {**example_data, "template": template})
-                await context.bot.send_document(
-                    chat_id=update.effective_chat.id,
-                    document=io.BytesIO(pdf_bytes),
-                    filename=f"{template}_preview.pdf",
-                    caption=f"Preview: {TEMPLATES[template]}",
-                )
-            except Exception as e:
-                print(f"Error generating {template} preview: {e}")
-                await update.message.reply_text(
-                    f"Couldn't generate {template} preview. Please try another template."
-                )
-
+        # Send template selection FIRST so user can choose immediately
         await update.message.reply_text(
             "🎨 *Choose your resume template*:\n\n"
-            "Above you'll see previews of each template with example data.\n"
-            "Select which one you'd like to use for your resume:",
+            "Previews are being generated and will appear shortly.\n"
+            "You can select a template now or wait for the previews:",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
+
+        # Generate and send previews as a background task to prevent timeout
+        asyncio.create_task(_send_previews_background(
+            context, example_data, update.effective_chat.id
+        ))
+
         return ConversationHandler.END
     else:
         user_data[user_id]["template"] = "BASIC"
@@ -840,7 +909,7 @@ async def show_premium_features(update: Update, context: ContextTypes.DEFAULT_TY
                                         parse_mode="Markdown",
                                         reply_markup=reply_markup)
 
-    # Send example premium templates
+    # Send example premium templates in background to avoid timeout
     example_data = {
         "name": "Emily Chen",
         "contact": "emily.chen@email.com | (555) 123-4567 | linkedin.com/in/emilychen",
@@ -878,43 +947,9 @@ async def show_premium_features(update: Update, context: ContextTypes.DEFAULT_TY
         "user_id": update.effective_user.id,
     }
 
-    # Send loading message
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text="🔄 Preparing premium template examples...",
-        parse_mode="Markdown",
-    )
-
-    # Generate and send previews of premium templates
-    for template in ["MODERN", "CREATIVE", "MINIMALIST"]:
-        try:
-            loop = asyncio.get_running_loop()
-            pdf_bytes = await loop.run_in_executor(None, generate_pdf_bytes, {**example_data, "template": template}, preview_mode=True)
-            await context.bot.send_document(
-                chat_id=update.effective_chat.id,
-                document=io.BytesIO(pdf_bytes),
-                filename=f"{template}_example.pdf",
-                caption=f"Example: {TEMPLATES[template]}",
-                parse_mode="Markdown",
-            )
-
-        except Exception as e:
-            print(f"Error generating {template} example: {e}")
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=f"⚠️ Couldn't generate {template} example. Please try again later.",
-                parse_mode="Markdown",
-            )
-
-    # Add reminder for non-premium users
-    if not is_premium(update.effective_user.id):
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text="🔓 *Upgrade to premium* to use these beautiful templates!\n\n"
-            "Use /redeem with your premium key or contact @ThantLwinMaung to get started.",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-        )
+    asyncio.create_task(_send_premium_previews_background(
+        context, example_data, update.effective_chat.id, keyboard
+    ))
 
 
 async def get_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1146,24 +1181,6 @@ async def shutdown(application):
     # Close all database connections
     connection_pool.closeall()
     
-def run_bot():
-    """Run the Telegram bot in the background"""
-    app = ApplicationBuilder().token(TOKEN).post_init(post_init).build()
-    setup_handlers(app)
-    
-    # Create an event loop for the thread
-    def polling_thread():
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(app.run_polling())
-    
-    thread = Thread(target=polling_thread)
-    thread.daemon = True
-    thread.start()
-    
-    logger.info("✅ Telegram bot is running in background...")
-    return thread
-
 def setup_handlers(app):
     """Configure all handlers"""
     # Conversation handler first
@@ -1241,10 +1258,10 @@ async def main():
         ApplicationBuilder()
         .token(TOKEN)
         .post_init(post_init)
-        .read_timeout(30)
-        .write_timeout(30)
-        .connect_timeout(30)
-        .pool_timeout(30)
+        .read_timeout(60)
+        .write_timeout(60)
+        .connect_timeout(60)
+        .pool_timeout(60)
         .build()
     )
     setup_handlers(app)
