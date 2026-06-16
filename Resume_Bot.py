@@ -84,569 +84,6 @@ TEMPLATES = {
     "MINIMALIST": "✂️ Minimalist (Premium)",
 }
 
-# ===== LANGUAGE SUPPORT =====
-# Available languages
-LANGUAGES = {
-    "en": "English 🇬🇧",
-    "my": "မြန်မာ 🇲🇲",
-}
-
-# User language preference storage: {user_id: language_code}
-user_languages = {}
-
-def get_user_lang(user_id):
-    """Get the language code for a user, defaulting to 'en'"""
-    return user_languages.get(user_id, "en")
-
-def set_user_lang(user_id, lang_code):
-    """Set the language preference for a user"""
-    if lang_code in LANGUAGES:
-        user_languages[user_id] = lang_code
-        return True
-    return False
-
-def t(user_id, key, **kwargs):
-    """
-    Translate a key into the user's preferred language.
-    Falls back to English if the key or translation is missing.
-    """
-    lang = get_user_lang(user_id)
-    text = TRANSLATIONS.get(key, {}).get(lang)
-    if text is None:
-        # Fallback to English
-        text = TRANSLATIONS.get(key, {}).get("en", key)
-    if kwargs:
-        text = text.format(**kwargs)
-    return text
-
-# Full translations dictionary
-TRANSLATIONS = {
-    # ===== START / WELCOME =====
-    "welcome": {
-        "en": (
-            "🌟 *Welcome to ResumeGenie*, {name}!\n\n"
-            "I can help you create professional resumes in minutes. "
-            "Choose an option below to get started."
-        ),
-        "my": (
-            "🌟 *ResumeGenie မှကြိုဆိုပါတယ်*, {name}!\n\n"
-            "ကျွန်ုပ်သည် သင့်အတွက် မိနစ်ပိုင်းအတွင်း ပရော်ဖက်ရှင်နယ် CV များကို "
-            "ဖန်တီးပေးနိုင်ပါသည်။ စတင်ရန် အောက်ပါရွေးချယ်စရာများထဲမှ တစ်ခုကို ရွေးချယ်ပါ။"
-        ),
-    },
-    "premium_status_active": {
-        "en": "🌟 *Premium Status:* Active",
-        "my": "🌟 *Premium အခြေအနေ:* အသက်ဝင်နေသည်",
-    },
-    "premium_status_inactive": {
-        "en": "🔒 *Premium Status:* Not Active",
-        "my": "🔒 *Premium အခြေအနေ:* မသက်ဝင်သေးပါ",
-    },
-
-    # ===== BUTTON LABELS =====
-    "btn_new_resume": {
-        "en": "✨ Create New Resume",
-        "my": "✨ CV အသစ်ဖန်တီးမည်",
-    },
-    "btn_premium": {
-        "en": "💎 Premium Features",
-        "my": "💎 Premium လုပ်ဆောင်ချက်များ",
-    },
-    "btn_help": {
-        "en": "ℹ️ Help",
-        "my": "ℹ️ အကူအညီ",
-    },
-    "btn_privacy": {
-        "en": "🔒 Privacy Policy",
-        "my": "🔒 ကိုယ်ရေးအချက်အလက်မူဝါဒ",
-    },
-    "btn_back": {
-        "en": "⬅️ Back",
-        "my": "⬅️ နောက်သို့",
-    },
-    "btn_get_premium": {
-        "en": "🛒 Get Premium",
-        "my": "🛒 Premium ရယူမည်",
-    },
-    "btn_language": {
-        "en": "🌐 Language",
-        "my": "🌐 ဘာသာစကား",
-    },
-
-    # ===== RESUME CREATION =====
-    "resume_start_title": {
-        "en": "📝 *Let's Create Your Professional Resume!*",
-        "my": "📝 *သင့်ရဲ့ Professional CV ကိုဖန်တီးကြရအောင်!*",
-    },
-    "resume_start_desc": {
-        "en": "We'll go through a few simple steps to build your perfect resume.",
-        "my": "သင့်ရဲ့အကောင်းဆုံး CV ကိုဖန်တီးဖို့ အဆင့်အနည်းငယ်ကို ဖြတ်သန်းသွားပါမယ်။",
-    },
-    "resume_step_name": {
-        "en": "🔹 *Step 1 of 7*\nWhat's your *full name*?\n\nExample: *John Doe*",
-        "my": "🔹 *အဆင့် ၁ မှ ၇*\nသင့်ရဲ့ *နာမည်အပြည့်အစုံ* ကိုထည့်ပါ။\n\nဥပမာ: *မောင်ကျော်မြင့်*",
-    },
-    "resume_step_contact": {
-        "en": (
-            "📞 *Step 2 of 7*\n"
-            "Please share your *contact information*:\n\n"
-            "Include any of these (separate with | ):\n"
-            "- Email\n- Phone\n- LinkedIn\n- Portfolio\n\n"
-            "Example:\n"
-            "*john@email.com | +123456789 | linkedin.com/in/john*"
-        ),
-        "my": (
-            "📞 *အဆင့် ၂ မှ ၇*\n"
-            "သင့်ရဲ့ *ဆက်သွယ်ရန်အချက်အလက်များ* ကိုမျှဝေပါ:\n\n"
-            "ဤအရာများထည့်နိုင်သည် (| ဖြင့်ခြားပါ):\n"
-            "- အီးမေးလ်\n- ဖုန်းနံပါတ်\n- LinkedIn\n- Portfolio\n\n"
-            "ဥပမာ:\n"
-            "*john@email.com | +123456789 | linkedin.com/in/john*"
-        ),
-    },
-    "resume_step_education": {
-        "en": (
-            "🎓 *Step 3 of 7*\n"
-            "Tell me about your *education*:\n\n"
-            "Include:\n- Degree\n- University\n- Year\n\n"
-            "Example:\n"
-            "*BSc Computer Science, MIT, 2020*\n"
-            "*MBA, Harvard University, 2022*"
-        ),
-        "my": (
-            "🎓 *အဆင့် ၃ မှ ၇*\n"
-            "သင့်ရဲ့ *ပညာရေး* အကြောင်းပြောပြပါ:\n\n"
-            "ထည့်သွင်းရန်:\n- ဘွဲ့အမည်\n- တက္ကသိုလ်\n- ခုနှစ်\n\n"
-            "ဥပမာ:\n"
-            "*BSc Computer Science, MIT, 2020*\n"
-            "*MBA, Harvard University, 2022*"
-        ),
-    },
-    "resume_step_experience": {
-        "en": (
-            "💼 *Step 4 of 7*\n"
-            "List your *work experience*:\n\n"
-            "For each position include:\n- Job Title\n- Company\n- Duration\n- Responsibilities\n\n"
-            "Example:\n"
-            "*Software Engineer, Google, 2020-Present*\n"
-            "- Developed new features\n- Optimized performance"
-        ),
-        "my": (
-            "💼 *အဆင့် ၄ မှ ၇*\n"
-            "သင့်ရဲ့ *အလုပ်အတွေ့အကြုံ* ကိုစာရင်းပြုစုပါ:\n\n"
-            "ရာထူးတစ်ခုစီအတွက်:\n- ရာထူးအမည်\n- ကုမ္ပဏီ\n- ကာလ\n- တာဝန်များ\n\n"
-            "ဥပမာ:\n"
-            "*Software Engineer, Google, 2020-ယနေ့ထိ*\n"
-            "- အင်္ဂါရပ်အသစ်များတီထွင်ခြင်း\n- စွမ်းဆောင်ရည်မြှင့်တင်ခြင်း"
-        ),
-    },
-    "resume_step_skills": {
-        "en": (
-            "🛠️ *Step 5 of 7*\n"
-            "List your *skills* (comma separated):\n\n"
-            "Example:\n"
-            "*Python, JavaScript, Project Management, Team Leadership*"
-        ),
-        "my": (
-            "🛠️ *အဆင့် ၅ မှ ၇*\n"
-            "သင့်ရဲ့ *ကျွမ်းကျင်မှုများ* ကိုစာရင်းပြုစုပါ (ကော်မာခြားပါ):\n\n"
-            "ဥပမာ:\n"
-            "*Python, JavaScript, စီမံကိန်းစီမံခန့်ခွဲမှု, အဖွဲ့ခေါင်းဆောင်မှု*"
-        ),
-    },
-    "resume_step_summary": {
-        "en": (
-            "📝 *Step 6 of 7*\n"
-            "Write a *professional summary* about yourself:\n\n"
-            "Example:\n"
-            "*Experienced software engineer with 5+ years in developing scalable web applications. "
-            "Specialized in Python and cloud technologies. Strong problem-solving skills "
-            "and team leadership experience.*"
-        ),
-        "my": (
-            "📝 *အဆင့် ၆ မှ ၇*\n"
-            "သင့်အကြောင်း *အနှစ်ချုပ်* ရေးသားပါ:\n\n"
-            "ဥပမာ:\n"
-            "*၅ နှစ်ကျော်အတွေ့အကြုံရှိတဲ့ Software Engineer တစ်ဦးဖြစ်ပြီး "
-            "Python နှင့် Cloud နည်းပညာများကို အထူးပြုထားပါသည်။ "
-            "ပြဿနာဖြေရှင်းနိုင်မှုနှင့် အဖွဲ့ခေါင်းဆောင်မှု အတွေ့အကြုံများရှိပါသည်။*"
-        ),
-    },
-    "resume_template_choose": {
-        "en": (
-            "🎨 *Choose your resume template*:\n\n"
-            "Above you'll see previews of each template with example data.\n"
-            "Select which one you'd like to use for your resume:"
-        ),
-        "my": (
-            "🎨 *သင့် CV အတွက် Template ကိုရွေးချယ်ပါ*:\n\n"
-            "အထက်တွင် Template တစ်ခုစီ၏ နမူနာများကို ကြည့်ရှုနိုင်ပါသည်။\n"
-            "သင်အသုံးပြုလိုသော Template ကိုရွေးချယ်ပါ:"
-        ),
-    },
-    "resume_generating": {
-        "en": "⏳ Generating your resume with *{template} template*...\n\nUpgrade to premium for stylish templates!",
-        "my": "⏳ *{template} Template* ဖြင့် သင့် CV ကိုဖန်တီးနေပါသည်...\n\nစတိုင်ကျသော Template များအတွက် Premium သို့အဆင့်မြှင့်ပါ!",
-    },
-    "resume_ready": {
-        "en": "✅ *Your professional resume is ready!*",
-        "my": "✅ *သင့်ရဲ့ Professional CV အဆင်သင့်ဖြစ်ပါပြီ!*",
-    },
-    "resume_error_data": {
-        "en": "❌ Error: Resume data not found. Please start again.",
-        "my": "❌ အမှား: CV ဒေတာကိုရှာမတွေ့ပါ။ ကျေးဇူးပြု၍ ပြန်လည်စတင်ပါ။",
-    },
-    "resume_error_generate": {
-        "en": "❌ Error generating resume. Please try again.",
-        "my": "❌ CV ဖန်တီးရာတွင် အမှားရှိနေပါသည်။ ကျေးဇူးပြု၍ ပြန်လည်ကြိုးစားပါ။",
-    },
-    "resume_template_selected": {
-        "en": "✅ Selected template: *{template}*",
-        "my": "✅ ရွေးချယ်ထားသော Template: *{template}*",
-    },
-
-    # ===== HELP =====
-    "help_title": {
-        "en": "📝 *ResumeGenie Pro Help Guide* 📝",
-        "my": "📝 *ResumeGenie Pro အကူအညီလမ်းညွှန်* 📝",
-    },
-    "help_getting_started_title": {
-        "en": "✨ *Getting Started*",
-        "my": "✨ *စတင်အသုံးပြုခြင်း*",
-    },
-    "help_getting_started": {
-        "en": (
-            "- Use /start to see main menu\n"
-            "- Click \"Create New Resume\" to begin\n"
-            "- Follow the step-by-step process"
-        ),
-        "my": (
-            "- ပင်မမီနူးကြည့်ရန် /start ကိုသုံးပါ\n"
-            "- စတင်ရန် \"CV အသစ်ဖန်တီးမည်\" ကိုနှိပ်ပါ\n"
-            "- အဆင့်ဆင့်လုပ်ဆောင်ချက်များကိုလိုက်နာပါ"
-        ),
-    },
-    "help_premium_title": {
-        "en": "💎 *Premium Features*",
-        "my": "💎 *Premium လုပ်ဆောင်ချက်များ*",
-    },
-    "help_premium": {
-        "en": (
-            "- Access premium templates\n"
-            "- Unlimited resume saves\n"
-            "- Priority support"
-        ),
-        "my": (
-            "- Premium Template များကိုသုံးခွင့်\n"
-            "- CV သိမ်းဆည်းမှု အကန့်အသတ်မရှိ\n"
-            "- ဦးစားပေးပံ့ပိုးကူညီမှု"
-        ),
-    },
-    "help_activation_title": {
-        "en": "🔑 *Premium Activation*",
-        "my": "🔑 *Premium အသက်သွင်းခြင်း*",
-    },
-    "help_activation": {
-        "en": (
-            "- Contact admin for premium keys\n"
-            "- Use /redeem <key> to activate"
-        ),
-        "my": (
-            "- Premium သော့များအတွက် အက်ဒမင်ကိုဆက်သွယ်ပါ\n"
-            "- အသက်သွင်းရန် /redeem <key> ကိုသုံးပါ"
-        ),
-    },
-    "help_commands_title": {
-        "en": "🛠 *Commands*",
-        "my": "🛠 *Commands များ*",
-    },
-    "help_commands": {
-        "en": (
-            "/start - Show main menu\n"
-            "/newresume - Start new resume\n"
-            "/redeem - Activate premium\n"
-            "/language - Change language\n"
-            "/cancel - Cancel current operation"
-        ),
-        "my": (
-            "/start - ပင်မမီနူးပြသခြင်း\n"
-            "/newresume - CV အသစ်စတင်ခြင်း\n"
-            "/redeem - Premium အသက်သွင်းခြင်း\n"
-            "/language - ဘာသာစကားပြောင်းလဲခြင်း\n"
-            "/cancel - လုပ်ဆောင်ချက်ဖျက်သိမ်းခြင်း"
-        ),
-    },
-    "help_contact": {
-        "en": "Need more help? Contact @ThantLwinMaung",
-        "my": "နောက်ထပ်အကူအညီလိုပါသလား? @ThantLwinMaung ကိုဆက်သွယ်ပါ",
-    },
-
-    # ===== PREMIUM FEATURES =====
-    "premium_title": {
-        "en": "💎 *Premium Features* 💎",
-        "my": "💎 *Premium လုပ်ဆောင်ချက်များ* 💎",
-    },
-    "premium_templates_title": {
-        "en": "✨ *Professional Templates*",
-        "my": "✨ *Professional Template များ*",
-    },
-    "premium_templates": {
-        "en": (
-            "- Modern, Creative, and Minimalist designs\n"
-            "- ATS-friendly formats\n"
-            "- Custom color schemes"
-        ),
-        "my": (
-            "- Modern, Creative နှင့် Minimalist ဒီဇိုင်းများ\n"
-            "- ATS-friendly ဖော်မတ်များ\n"
-            "- အရောင်အသွေးများကိုယ်တိုင်ပြောင်းလဲနိုင်"
-        ),
-    },
-    "premium_unlimited_title": {
-        "en": "🔓 *Unlimited Access*",
-        "my": "🔓 *အကန့်အသတ်မရှိအသုံးပြုခွင့်*",
-    },
-    "premium_unlimited": {
-        "en": (
-            "- No restrictions on resume saves\n"
-            "- Edit existing resumes anytime\n"
-            "- No watermarks on your resumes"
-        ),
-        "my": (
-            "- CV သိမ်းဆည်းခြင်းကိုကန့်သတ်ချက်မရှိ\n"
-            "- ရှိပြီးသား CV များကိုအချိန်မရွေးပြင်ဆင်နိုင်\n"
-            "- သင့် CV များတွင် ရေစာမပါဝင်ပါ"
-        ),
-    },
-    "premium_priority_title": {
-        "en": "⚡ *Priority Features*",
-        "my": "⚡ *ဦးစားပေးလုပ်ဆောင်ချက်များ*",
-    },
-    "premium_priority": {
-        "en": (
-            "- Faster processing\n"
-            "- Priority support\n"
-            "- Regular template updates"
-        ),
-        "my": (
-            "- မြန်ဆန်သောလုပ်ဆောင်မှု\n"
-            "- ဦးစားပေးပံ့ပိုးကူညီမှု\n"
-            "- Template အသစ်များပုံမှန်ထည့်သွင်းပေးခြင်း"
-        ),
-    },
-    "premium_pricing_title": {
-        "en": "💰 *Pricing Plans*",
-        "my": "💰 *စျေးနှုန်းအစီအစဉ်များ*",
-    },
-    "premium_pricing": {
-        "en": (
-            "- 1 month: 19,000 MMK\n"
-            "- 3 months: 50,000 MMK (15% off)\n"
-            "- 1 year: 159,600 MMK (30% off)"
-        ),
-        "my": (
-            "- ၁ လ: ၁၉,၀၀၀ ကျပ်\n"
-            "- ၃ လ: ၅၀,၀၀၀ ကျပ် (၁၅% လျှော့စျေး)\n"
-            "- ၁ နှစ်: ၁၅၉,၆၀၀ ကျပ် (၃၀% လျှော့စျေး)"
-        ),
-    },
-    "premium_activation_instructions": {
-        "en": (
-            "🔑 To activate premium:\n"
-            "1. Contact @ThantLwinMaung\n"
-            "2. Get your premium key\n"
-            "3. Use /redeem <key>"
-        ),
-        "my": (
-            "🔑 Premium ကိုအသက်သွင်းရန်:\n"
-            "၁. @ThantLwinMaung ကိုဆက်သွယ်ပါ\n"
-            "၂. သင့် Premium သော့ကိုရယူပါ\n"
-            "၃. /redeem <key> ကိုအသုံးပြုပါ"
-        ),
-    },
-    "premium_preparing": {
-        "en": "🔄 Preparing premium template examples...",
-        "my": "🔄 Premium Template နမူနာများကိုပြင်ဆင်နေပါသည်...",
-    },
-    "premium_upgrade_reminder": {
-        "en": (
-            "🔓 *Upgrade to premium* to use these beautiful templates!\n\n"
-            "Use /redeem with your premium key or contact @ThantLwinMaung to get started."
-        ),
-        "my": (
-            "🔓 ဤလှပသော Template များကိုအသုံးပြုရန် *Premium သို့အဆင့်မြှင့်ပါ*!\n\n"
-            "/redeem ဖြင့် သင့် Premium သော့ကိုထည့်သွင်းပါ သို့မဟုတ် @ThantLwinMaung ကိုဆက်သွယ်ပါ။"
-        ),
-    },
-
-    # ===== GET PREMIUM =====
-    "get_premium_title": {
-        "en": "🌟 *Get Premium Access*",
-        "my": "🌟 *Premium ရယူမည်*",
-    },
-    "get_premium_contact": {
-        "en": "📩 Contact @ThantLwinMaung to get your premium key!",
-        "my": "📩 သင့် Premium သော့ရယူရန် @ThantLwinMaung ကိုဆက်သွယ်ပါ!",
-    },
-    "get_premium_instructions": {
-        "en": (
-            "After receiving your premium key, use:\n"
-            "`/redeem YOUR_KEY` to activate premium."
-        ),
-        "my": (
-            "Premium သော့ရရှိပြီးနောက်၊ Premium ကိုအသက်သွင်းရန်:\n"
-            "`/redeem YOUR_KEY` ကိုအသုံးပြုပါ။"
-        ),
-    },
-
-    # ===== PRIVACY =====
-    "privacy_title": {
-        "en": "🔒 *Privacy Policy*",
-        "my": "🔒 *ကိုယ်ရေးအချက်အလက်မူဝါဒ*",
-    },
-    "privacy_intro": {
-        "en": "We take your privacy seriously. Please read our privacy policy at:",
-        "my": "သင့်ရဲ့ကိုယ်ရေးအချက်အလက်ကို ကျွန်ုပ်တို့အလေးထားပါသည်။ ကျွန်ုပ်တို့၏ ကိုယ်ရေးအချက်အလက်မူဝါဒကို ဤနေရာတွင်ဖတ်ရှုပါ:",
-    },
-    "privacy_link": {
-        "en": "[Privacy Policy Page]({url})",
-        "my": "[ကိုယ်ရေးအချက်အလက်မူဝါဒ စာမျက်နှာ]({url})",
-    },
-    "privacy_key_points_title": {
-        "en": "Key points:",
-        "my": "အဓိကအချက်များ:",
-    },
-    "privacy_point_1": {
-        "en": "- We don't store your personal data",
-        "my": "- သင့်ကိုယ်ရေးအချက်အလက်များကိုကျွန်ုပ်တို့သိမ်းဆည်းမထားပါ",
-    },
-    "privacy_point_2": {
-        "en": "- Your resume information is processed temporarily",
-        "my": "- သင့် CV အချက်အလက်များကိုယာယီသာလုပ်ဆောင်ပါသည်",
-    },
-    "privacy_point_3": {
-        "en": "- No data sharing with third parties",
-        "my": "- တတိယပါတီများနှင့်ဒေတာမျှဝေခြင်းမရှိပါ",
-    },
-
-    # ===== LANGUAGE SETTINGS =====
-    "language_title": {
-        "en": "🌐 *Select Your Language*",
-        "my": "🌐 *သင့်ဘာသာစကားကိုရွေးချယ်ပါ*",
-    },
-    "language_selected": {
-        "en": "✅ Language set to *English* 🇬🇧",
-        "my": "✅ ဘာသာစကားကို *မြန်မာ* 🇲🇲 သို့ပြောင်းလဲပြီးပါပြီ",
-    },
-
-    # ===== CANCEL =====
-    "cancel_message": {
-        "en": "🚫 Operation cancelled. Your progress has been cleared.",
-        "my": "🚫 လုပ်ဆောင်ချက်ကိုဖျက်သိမ်းလိုက်ပါသည်။ သင့်တိုးတက်မှုများကိုရှင်းလင်းလိုက်ပါပြီ။",
-    },
-
-    # ===== ERRORS =====
-    "error_prefix": {
-        "en": "❌ Error processing your {field}. Please try again.",
-        "my": "❌ သင့်ရဲ့ {field} ကိုလုပ်ဆောင်ရာတွင်အမှားရှိနေပါသည်။ ကျေးဇူးပြု၍ ပြန်လည်ကြိုးစားပါ။",
-    },
-    "error_generic": {
-        "en": "❌ Failed to start resume creation. Please try again.",
-        "my": "❌ CV ဖန်တီးခြင်းကိုစတင်ရန်မအောင်မြင်ပါ။ ကျေးဇူးပြု၍ ပြန်လည်ကြိုးစားပါ။",
-    },
-    "error_occurred": {
-        "en": "❌ An error occurred. Our team has been notified.",
-        "my": "❌ အမှားတစ်ခုဖြစ်ပွားခဲ့ပါသည်။ ကျွန်ုပ်တို့အဖွဲ့ကိုအကြောင်းကြားလိုက်ပါပြီ။",
-    },
-    "error_occurred_alert": {
-        "en": "❌ Error occurred. Please try again.",
-        "my": "❌ အမှားတစ်ခုဖြစ်ပွားခဲ့ပါသည်။ ကျေးဇူးပြု၍ ပြန်လည်ကြိုးစားပါ။",
-    },
-
-    # ===== REDEEM =====
-    "redeem_usage": {
-        "en": "Usage: `/redeem YOUR_KEY`\n\nContact @ThantLwinMaung to get a premium key.",
-        "my": "အသုံးပြုနည်း: `/redeem YOUR_KEY`\n\nPremium သော့ရယူရန် @ThantLwinMaung ကိုဆက်သွယ်ပါ။",
-    },
-    "redeem_invalid_format": {
-        "en": "❌ *Invalid Key Format*\n\nThe key you entered is not in the correct format.",
-        "my": "❌ *သော့ဖော်မတ်မမှန်ပါ*\n\nသင်ထည့်သွင်းလိုက်သောသော့သည်ဖော်မတ်မှန်ကန်မှုမရှိပါ။",
-    },
-    "redeem_invalid_signature": {
-        "en": "❌ *Invalid Key*\n\nThis key appears to be tampered with.",
-        "my": "❌ *သော့မမှန်ကန်ပါ*\n\nဤသော့သည်ပြောင်းလဲခံထားရပုံပေါ်ပါသည်။",
-    },
-    "redeem_not_found": {
-        "en": "❌ *Invalid Key*\n\nThis key was not found in our system.",
-        "my": "❌ *သော့မမှန်ကန်ပါ*\n\nဤသော့ကိုကျွန်ုပ်တို့စနစ်တွင်ရှာမတွေ့ပါ။",
-    },
-    "redeem_expired": {
-        "en": "❌ *Expired Key*\n\nThis key has already expired.",
-        "my": "❌ *သော့သက်တမ်းကုန်သွားပါပြီ*\n\nဤသော့သည်သက်တမ်းကုန်ဆုံးသွားပါပြီ။",
-    },
-    "redeem_rate_limit": {
-        "en": "⏳ Too many attempts! Please try again in {seconds} seconds.",
-        "my": "⏳ ကြိုးစားမှုများလွန်းနေပါသည်! {seconds} စက္ကန့်အကြာတွင်ပြန်လည်ကြိုးစားပါ။",
-    },
-    "redeem_success": {
-        "en": (
-            "🎉 *Premium Activated!*\n\n"
-            "Your premium access is valid until *{date}*.\n\n"
-            "You now have access to all premium templates and features!"
-        ),
-        "my": (
-            "🎉 *Premium အသက်သွင်းပြီးပါပြီ!*\n\n"
-            "သင့် Premium အသုံးပြုခွင့်သည် *{date}* အထိသက်ဝင်ပါသည်။\n\n"
-            "ယခုတွင် သင်သည် Premium Template များနှင့်လုပ်ဆောင်ချက်အားလုံးကိုသုံးခွင့်ရရှိပါပြီ!"
-        ),
-    },
-    "redeem_error": {
-        "en": "❌ Failed to redeem key. Please try again.",
-        "my": "❌ သော့ကိုအသက်သွင်းရန်မအောင်မြင်ပါ။ ကျေးဇူးပြု၍ ပြန်လည်ကြိုးစားပါ။",
-    },
-
-    # ===== PREVIEW CAPTIONS =====
-    "preview_caption": {
-        "en": "Preview: {template}",
-        "my": "နမူနာ: {template}",
-    },
-    "preview_error": {
-        "en": "Couldn't generate {template} preview. Please try another template.",
-        "my": "{template} နမူနာကိုဖန်တီးနိုင်ခြင်းမရှိပါ။ အခြား Template တစ်ခုကိုရွေးချယ်ပါ။",
-    },
-    "example_caption": {
-        "en": "Example: {template}",
-        "my": "ဥပမာ: {template}",
-    },
-    "example_error": {
-        "en": "⚠️ Couldn't generate {template} example. Please try again later.",
-        "my": "⚠️ {template} ဥပမာကိုဖန်တီးနိုင်ခြင်းမရှိပါ။ နောက်မှပြန်လည်ကြိုးစားပါ။",
-    },
-
-    # ===== PREMIUM GENERATE KEY =====
-    "generate_key_success": {
-        "en": (
-            "🔑 *New Premium Key Generated*\n\n"
-            "Key: `{key}`\n"
-            "Duration: {duration} days\n"
-            "Expires: {expiry}\n\n"
-            "Share this with user:\n`/redeem {key}`"
-        ),
-        "my": (
-            "🔑 *Premium သော့အသစ်ထုတ်ပေးပြီးပါပြီ*\n\n"
-            "သော့: `{key}`\n"
-            "ကြာချိန်: {duration} ရက်\n"
-            "သက်တမ်းကုန်: {expiry}\n\n"
-            "ဤသော့ကိုအသုံးပြုသူအားမျှဝေပါ:\n`/redeem {key}`"
-        ),
-    },
-    "generate_key_error": {
-        "en": "❌ Failed to generate key. Please check logs.",
-        "my": "❌ သော့ထုတ်ပေးရန်မအောင်မြင်ပါ။ Log များကိုစစ်ဆေးပါ။",
-    },
-}
-# ===== END LANGUAGE SUPPORT =====
-
 # Fetch environment variables
 TOKEN = os.getenv("TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
@@ -662,7 +99,7 @@ if not DATABASE_URL:
 async def db_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Admin-only guard
     if str(update.effective_user.id) != ADMIN_ID:
-        await update.message.reply_text("❌ You're not allowed to use this command.")
+        await update.message.reply_text("❌ You’re not allowed to use this command.")
         return
 
     # Existing logic
@@ -688,9 +125,9 @@ async def check_state(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(update.effective_user.id) != ADMIN_ID:
         # use callback_query if coming from a button
         if update.callback_query:
-            await update.callback_query.answer("❌ You're not allowed to use this command.", show_alert=True)
+            await update.callback_query.answer("❌ You’re not allowed to use this command.", show_alert=True)
         else:
-            await update.message.reply_text("❌ You're not allowed to use this command.")
+            await update.message.reply_text("❌ You’re not allowed to use this command.")
         return
 
     user_id = update.effective_user.id
@@ -781,7 +218,6 @@ async def post_init(application):
         BotCommand("redeem", "Redeem premium key"),
         BotCommand("help", "Get help"),
         BotCommand("privacy", "View privacy policy"),
-        BotCommand("language", "Change language / ဘာသာစကားပြောင်းရန်"),
         BotCommand("cancel", "Cancel current operation"),
     ]
     await application.bot.set_my_commands(commands)
@@ -792,24 +228,24 @@ async def post_init(application):
     logger.info(f"Bot commands registered: {commands}")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    user_id = user.id
-    lang = get_user_lang(user_id)
-
     keyboard = [
-        [InlineKeyboardButton(t(user_id, "btn_new_resume"), callback_data="new_resume")],
-        [InlineKeyboardButton(t(user_id, "btn_premium"), callback_data="premium_features")],
-        [InlineKeyboardButton(t(user_id, "btn_help"), callback_data="show_help")],
-        [InlineKeyboardButton(t(user_id, "btn_privacy"), callback_data="privacy_policy")],
-        [InlineKeyboardButton(t(user_id, "btn_language"), callback_data="show_language")],
+        [InlineKeyboardButton("✨ Create New Resume", callback_data="new_resume")],
+        [InlineKeyboardButton("💎 Premium Features", callback_data="premium_features")],
+        [InlineKeyboardButton("ℹ️ Help", callback_data="show_help")],
+        [InlineKeyboardButton("🔒 Privacy Policy", callback_data="privacy_policy")],  # New button
     ]
 
-    greeting = t(user_id, "welcome", name=user.first_name)
+    user = update.effective_user
+    greeting = (
+        f"🌟 *Welcome to ResumeGenie*, {user.first_name}!\n\n"
+        "I can help you create professional resumes in minutes. "
+        "Choose an option below to get started."
+    )
 
     premium_status = (
-        t(user_id, "premium_status_active")
+        "🌟 *Premium Status:* Active"
         if is_premium(user.id)
-        else t(user_id, "premium_status_inactive")
+        else "🔒 *Premium Status:* Not Active"
     )
 
     if update.message:
@@ -845,23 +281,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "show_help": show_help,
         "back_to_main": start,
         "get_premium": get_premium,
-        "privacy_policy": show_privacy_policy,
-        "show_language": show_language_menu,
+        "privacy_policy": show_privacy_policy,  # New handler
     }
-
-    # Language selection callbacks (lang_en, lang_my)
-    if query.data.startswith("lang_"):
-        lang_code = query.data.split("_")[1]
-        user_id = query.from_user.id
-        if set_user_lang(user_id, lang_code):
-            await query.edit_message_text(
-                t(user_id, "language_selected"),
-                parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton(t(user_id, "btn_back"), callback_data="back_to_main")],
-                ]),
-            )
-        return
 
     if query.data in handlers:
         await handlers[query.data](update, context)
@@ -873,61 +294,39 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data[user_id]["template"] = template
         user_data[user_id]["user_id"] = user_id
         await query.edit_message_text(
-            t(user_id, "resume_template_selected", template=TEMPLATES[template]), parse_mode="Markdown"
+            f"✅ Selected template: *{TEMPLATES[template]}*", parse_mode="Markdown"
         )
         await generate_resume(update, context)
 
 
-async def show_language_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    user_id = update.effective_user.id
-
-    keyboard = []
-    for code, label in LANGUAGES.items():
-        keyboard.append([InlineKeyboardButton(label, callback_data=f"lang_{code}")])
-
-    keyboard.append([InlineKeyboardButton(t(user_id, "btn_back"), callback_data="back_to_main")])
-
-    await query.edit_message_text(
-        t(user_id, "language_title"),
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-    )
-
-
-async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-
-    keyboard = []
-    for code, label in LANGUAGES.items():
-        keyboard.append([InlineKeyboardButton(label, callback_data=f"lang_{code}")])
-
-    keyboard.append([InlineKeyboardButton(t(user_id, "btn_back"), callback_data="back_to_main")])
-
-    await update.message.reply_text(
-        t(user_id, "language_title"),
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-    )
-
-
 async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"Help command triggered by {update.effective_user.id}")
-    user_id = update.effective_user.id
+    help_text = """
+📝 *ResumeGenie Pro Help Guide* 📝
 
-    help_text = (
-        f"{t(user_id, 'help_title')}\n\n"
-        f"{t(user_id, 'help_getting_started_title')}\n"
-        f"{t(user_id, 'help_getting_started')}\n\n"
-        f"{t(user_id, 'help_premium_title')}\n"
-        f"{t(user_id, 'help_premium')}\n\n"
-        f"{t(user_id, 'help_activation_title')}\n"
-        f"{t(user_id, 'help_activation')}\n\n"
-        f"{t(user_id, 'help_commands_title')}\n"
-        f"{t(user_id, 'help_commands')}\n\n"
-        f"{t(user_id, 'help_contact')}"
-    )
-    keyboard = [[InlineKeyboardButton(t(user_id, "btn_back"), callback_data="back_to_main")]]
+✨ *Getting Started*
+- Use /start to see main menu
+- Click "Create New Resume" to begin
+- Follow the step-by-step process
+
+💎 *Premium Features*
+- Access premium templates
+- Unlimited resume saves
+- Priority support
+
+🔑 *Premium Activation*
+- Contact db for premium keys
+- Use /redeem <key> to activate
+
+🛠 *Commands*
+/start - Show main menu
+/newresume - Start new resume
+/redeem - Activate premium
+/cancel - Cancel current operation
+
+Need more help? Contact @ThantLwinMaung
+"""
+    keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="back_to_main")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     if update.callback_query:
@@ -942,21 +341,20 @@ async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def show_privacy_policy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    user_id = update.effective_user.id
     privacy_policy_url = "https://privacyforresumegenie.onrender.com"  # Replace with your actual URL
     
     keyboard = [
-        [InlineKeyboardButton(t(user_id, "btn_back"), callback_data="back_to_main")],
+        [InlineKeyboardButton("⬅️ Back", callback_data="back_to_main")],
     ]
     
     message = (
-        f"{t(user_id, 'privacy_title')}\n\n"
-        f"{t(user_id, 'privacy_intro')}\n"
-        f"{t(user_id, 'privacy_link', url=privacy_policy_url)}\n\n"
-        f"{t(user_id, 'privacy_key_points_title')}\n"
-        f"{t(user_id, 'privacy_point_1')}\n"
-        f"{t(user_id, 'privacy_point_2')}\n"
-        f"{t(user_id, 'privacy_point_3')}"
+        "🔒 *Privacy Policy*\n\n"
+        "We take your privacy seriously. Please read our privacy policy at:\n"
+        f"[Privacy Policy Page]({privacy_policy_url})\n\n"
+        "Key points:\n"
+        "- We don't store your personal data\n"
+        "- Your resume information is processed temporarily\n"
+        "- No data sharing with third parties"
     )
     
     if query:
@@ -992,9 +390,11 @@ async def new_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
 
         message = (
-            f"{t(user_id, 'resume_start_title')}\n\n"
-            f"{t(user_id, 'resume_start_desc')}\n\n"
-            f"{t(user_id, 'resume_step_name')}"
+            "📝 *Let's Create Your Professional Resume!*\n\n"
+            "We'll go through a few simple steps to build your perfect resume.\n\n"
+            "🔹 *Step 1 of 7*\n"
+            "What's your *full name*?\n\n"
+            "Example: *John Doe*"
         )
 
         if query:
@@ -1012,8 +412,7 @@ async def new_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         logger.error(f"Error in new_resume: {e}")
-        user_id = update.effective_user.id
-        error_msg = t(user_id, "error_generic")
+        error_msg = "❌ Failed to start resume creation. Please try again."
         if update.callback_query:
             await update.callback_query.answer(error_msg, show_alert=True)
         else:
@@ -1028,14 +427,18 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"User {user_id} provided name: {update.message.text}")
 
         await update.message.reply_text(
-            t(user_id, "resume_step_contact"),
+            "📞 *Step 2 of 7*\n"
+            "Please share your *contact information*:\n\n"
+            "Include any of these (separate with | ):\n"
+            "- Email\n- Phone\n- LinkedIn\n- Portfolio\n\n"
+            "Example:\n"
+            "*john@email.com | +123456789 | linkedin.com/in/john*",
             parse_mode="Markdown",
         )
         return CONTACT
     except Exception as e:
         logger.error(f"Error in get_name: {e}")
-        user_id = update.effective_user.id
-        await update.message.reply_text(t(user_id, "error_prefix", field="name"))
+        await update.message.reply_text("❌ Error processing your name. Please try again.")
         return ConversationHandler.END
 
 
@@ -1044,7 +447,12 @@ async def get_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data[user_id]["contact"] = update.message.text
 
     await update.message.reply_text(
-        t(user_id, "resume_step_education"),
+        "🎓 *Step 3 of 7*\n"
+        "Tell me about your *education*:\n\n"
+        "Include:\n- Degree\n- University\n- Year\n\n"
+        "Example:\n"
+        "*BSc Computer Science, MIT, 2020*\n"
+        "*MBA, Harvard University, 2022*",
         parse_mode="Markdown",
     )
     return EDUCATION
@@ -1055,7 +463,12 @@ async def get_education(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data[user_id]["education"] = update.message.text
 
     await update.message.reply_text(
-        t(user_id, "resume_step_experience"),
+        "💼 *Step 4 of 7*\n"
+        "List your *work experience*:\n\n"
+        "For each position include:\n- Job Title\n- Company\n- Duration\n- Responsibilities\n\n"
+        "Example:\n"
+        "*Software Engineer, Google, 2020-Present*\n"
+        "- Developed new features\n- Optimized performance",
         parse_mode="Markdown",
     )
     return EXPERIENCE
@@ -1066,7 +479,10 @@ async def get_experience(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data[user_id]["experience"] = update.message.text
 
     await update.message.reply_text(
-        t(user_id, "resume_step_skills"),
+        "🛠️ *Step 5 of 7*\n"
+        "List your *skills* (comma separated):\n\n"
+        "Example:\n"
+        "*Python, JavaScript, Project Management, Team Leadership*",
         parse_mode="Markdown",
     )
     return SKILLS
@@ -1077,7 +493,12 @@ async def get_skills(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data[user_id]["skills"] = update.message.text
 
     await update.message.reply_text(
-        t(user_id, "resume_step_summary"),
+        "📝 *Step 6 of 7*\n"
+        "Write a *professional summary* about yourself:\n\n"
+        "Example:\n"
+        "*Experienced software engineer with 5+ years in developing scalable web applications. "
+        "Specialized in Python and cloud technologies. Strong problem-solving skills "
+        "and team leadership experience.*",
         parse_mode="Markdown",
     )
     return SUMMARY
@@ -1142,16 +563,18 @@ async def get_summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=update.effective_chat.id,
                     document=io.BytesIO(pdf_bytes),
                     filename=f"{template}_preview.pdf",
-                    caption=t(user_id, "preview_caption", template=TEMPLATES[template]),
+                    caption=f"Preview: {TEMPLATES[template]}",
                 )
             except Exception as e:
                 print(f"Error generating {template} preview: {e}")
                 await update.message.reply_text(
-                    t(user_id, "preview_error", template=template)
+                    f"Couldn't generate {template} preview. Please try another template."
                 )
 
         await update.message.reply_text(
-            t(user_id, "resume_template_choose"),
+            "🎨 *Choose your resume template*:\n\n"
+            "Above you'll see previews of each template with example data.\n"
+            "Select which one you'd like to use for your resume:",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
@@ -1159,7 +582,8 @@ async def get_summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         user_data[user_id]["template"] = "BASIC"
         await update.message.reply_text(
-            t(user_id, "resume_generating", template="Basic"),
+            "⏳ Generating your resume with *Basic template*...\n\n"
+            "Upgrade to premium for stylish templates!",
             parse_mode="Markdown",
         )
         return await generate_resume(update, context)
@@ -1177,21 +601,21 @@ async def generate_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Ensure we have complete data
     if user_id not in user_data:
-        await message.reply_text(t(user_id, "resume_error_data"))
+        await message.reply_text("❌ Error: Resume data not found. Please start again.")
         return ConversationHandler.END
 
     # Generate PDF
     try:
         pdf_bytes = generate_pdf_bytes(user_data[user_id])
     except Exception as e:
-        await message.reply_text(t(user_id, "resume_error_generate"))
+        await message.reply_text("❌ Error generating resume. Please try again.")
         return ConversationHandler.END
 
     # Send to user
     await message.reply_document(
         document=io.BytesIO(pdf_bytes),
         filename=f"{user_data[user_id]['name']}_Resume.pdf",
-        caption=t(user_id, "resume_ready"),
+        caption="✅ *Your professional resume is ready!*",
         parse_mode="Markdown",
     )
 
@@ -1353,23 +777,37 @@ def generate_pdf_bytes(data, preview_mode=False):
 
 async def show_premium_features(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"Premium command triggered by {update.effective_user.id}")
-    user_id = update.effective_user.id
+    premium_text = """
+💎 *Premium Features* 💎
 
-    premium_text = (
-        f"{t(user_id, 'premium_title')}\n\n"
-        f"{t(user_id, 'premium_templates_title')}\n"
-        f"{t(user_id, 'premium_templates')}\n\n"
-        f"{t(user_id, 'premium_unlimited_title')}\n"
-        f"{t(user_id, 'premium_unlimited')}\n\n"
-        f"{t(user_id, 'premium_priority_title')}\n"
-        f"{t(user_id, 'premium_priority')}\n\n"
-        f"{t(user_id, 'premium_pricing_title')}\n"
-        f"{t(user_id, 'premium_pricing')}\n\n"
-        f"{t(user_id, 'premium_activation_instructions')}"
-    )
+✨ *Professional Templates*
+- Modern, Creative, and Minimalist designs
+- ATS-friendly formats
+- Custom color schemes
+
+🔓 *Unlimited Access*
+- No restrictions on resume saves
+- Edit existing resumes anytime
+- No watermarks on your resumes
+
+⚡ *Priority Features*
+- Faster processing
+- Priority support
+- Regular template updates
+
+💰 *Pricing Plans*
+- 1 month: 19,000 MMK
+- 3 months: 50,000 MMK (15% off)
+- 1 year: 159,600 MMK (30% off)
+
+🔑 To activate premium:
+1. Contact @ThantLwinMaung
+2. Get your premium key
+3. Use /redeem <key>
+"""
     keyboard = [
-        [InlineKeyboardButton(t(user_id, "btn_get_premium"), callback_data="get_premium")],
-        [InlineKeyboardButton(t(user_id, "btn_back"), callback_data="back_to_main")],
+        [InlineKeyboardButton("🛒 Get Premium", callback_data="get_premium")],
+        [InlineKeyboardButton("⬅️ Back", callback_data="back_to_main")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -1424,7 +862,7 @@ async def show_premium_features(update: Update, context: ContextTypes.DEFAULT_TY
     # Send loading message
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text=t(user_id, "premium_preparing"),
+        text="🔄 Preparing premium template examples...",
         parse_mode="Markdown",
     )
 
@@ -1436,7 +874,7 @@ async def show_premium_features(update: Update, context: ContextTypes.DEFAULT_TY
                 chat_id=update.effective_chat.id,
                 document=io.BytesIO(pdf_bytes),
                 filename=f"{template}_example.pdf",
-                caption=t(user_id, "example_caption", template=TEMPLATES[template]),
+                caption=f"Example: {TEMPLATES[template]}",
                 parse_mode="Markdown",
             )
 
@@ -1444,7 +882,7 @@ async def show_premium_features(update: Update, context: ContextTypes.DEFAULT_TY
             print(f"Error generating {template} example: {e}")
             await context.bot.send_message(
                 chat_id=update.effective_chat.id,
-                text=t(user_id, "example_error", template=template),
+                text=f"⚠️ Couldn't generate {template} example. Please try again later.",
                 parse_mode="Markdown",
             )
 
@@ -1452,7 +890,8 @@ async def show_premium_features(update: Update, context: ContextTypes.DEFAULT_TY
     if not is_premium(update.effective_user.id):
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text=t(user_id, "premium_upgrade_reminder"),
+            text="🔓 *Upgrade to premium* to use these beautiful templates!\n\n"
+            "Use /redeem with your premium key or contact @ThantLwinMaung to get started.",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
@@ -1460,16 +899,17 @@ async def show_premium_features(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def get_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    user_id = update.effective_user.id
+    contact_admin = "📩 Contact @ThantLwinMaung to get your premium key!"
 
     keyboard = [
-        [InlineKeyboardButton(t(user_id, "btn_premium"), callback_data="premium_features")],
-        [InlineKeyboardButton(t(user_id, "btn_back"), callback_data="back_to_main")],
+        [InlineKeyboardButton("💎 Premium Features", callback_data="premium_features")],
+        [InlineKeyboardButton("⬅️ Back", callback_data="back_to_main")],
     ]
 
     await query.edit_message_text(
-        f"{t(user_id, 'get_premium_title')}\n\n{t(user_id, 'get_premium_contact')}\n\n"
-        f"{t(user_id, 'get_premium_instructions')}",
+        f"🌟 *Get Premium Access*\n\n{contact_admin}\n\n"
+        "After receiving your premium key, use:\n"
+        "`/redeem YOUR_KEY` to activate premium.",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
@@ -1501,13 +941,17 @@ async def generate_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log_security_event("key_generated", str(update.effective_user.id), f"Duration: {duration} days")
 
         await update.message.reply_text(
-            t(update.effective_user.id, "generate_key_success", key=key, duration=duration, expiry=expiry),
+            f"🔑 *New Premium Key Generated*\n\n"
+            f"Key: `{key}`\n"
+            f"Duration: {duration} days\n"
+            f"Expires: {expiry}\n\n"
+            f"Share this with user:\n`/redeem {key}`",
             parse_mode="Markdown",
         )
 
     except Exception as e:
         logger.error(f"GenerateKey Error: {e}")
-        await update.message.reply_text(t(update.effective_user.id, "generate_key_error"), parse_mode="Markdown")
+        await update.message.reply_text("❌ Failed to generate key. Please check logs.", parse_mode="Markdown")
 
 async def redeem_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
@@ -1515,7 +959,7 @@ async def redeem_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if check_rate_limit(user_id):
         remaining_time = int(REDEEM_COOLDOWN - (time.time() - redeem_attempts[user_id]['last_attempt']))
         await update.message.reply_text(
-            t(update.effective_user.id, "redeem_rate_limit", seconds=remaining_time),
+            f"⏳ Too many attempts! Please try again in {remaining_time} seconds.",
             parse_mode="Markdown",
         )
         return
@@ -1523,7 +967,7 @@ async def redeem_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args or len(context.args) != 1:
         record_attempt(user_id, False)
         await update.message.reply_text(
-            t(update.effective_user.id, "redeem_usage"),
+            "Usage: `/redeem YOUR_KEY`\n\nContact @ThantLwinMaung to get a premium key.",
             parse_mode="Markdown",
         )
         return
@@ -1533,7 +977,7 @@ async def redeem_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
         record_attempt(user_id, False)
         log_security_event("invalid_key_format", user_id, input_key)
         await update.message.reply_text(
-            t(update.effective_user.id, "redeem_invalid_format"),
+            "❌ *Invalid Key Format*\n\nThe key you entered is not in the correct format.",
             parse_mode="Markdown",
         )
         return
@@ -1542,7 +986,7 @@ async def redeem_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
         record_attempt(user_id, False)
         log_security_event("invalid_key_signature", user_id, input_key)
         await update.message.reply_text(
-            t(update.effective_user.id, "redeem_invalid_signature"),
+            "❌ *Invalid Key*\n\nThis key appears to be tampered with.",
             parse_mode="Markdown",
         )
         return
@@ -1560,7 +1004,7 @@ async def redeem_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 record_attempt(user_id, False)
                 log_security_event("invalid_key_attempt", user_id, input_key)
                 await update.message.reply_text(
-                    t(update.effective_user.id, "redeem_not_found"),
+                    "❌ *Invalid Key*\n\nThis key was not found in our system.",
                     parse_mode="Markdown",
                 )
                 return
@@ -1570,7 +1014,7 @@ async def redeem_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 record_attempt(user_id, False)
                 log_security_event("expired_key", user_id, input_key)
                 await update.message.reply_text(
-                    t(update.effective_user.id, "redeem_expired"),
+                    "❌ *Expired Key*\n\nThis key has already expired.",
                     parse_mode="Markdown",
                 )
                 return
@@ -1595,17 +1039,19 @@ async def redeem_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log_security_event("key_redeemed", user_id, f"Expires: {expiry_date}")
 
         await update.message.reply_text(
-            t(update.effective_user.id, "redeem_success", date=expiry_date),
+            f"🎉 *Premium Activated!*\n\n"
+            f"Your premium access is valid until *{expiry_date}*.\n\n"
+            f"You now have access to all premium templates and features!",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton(t(update.effective_user.id, "btn_premium"), callback_data="premium_features")],
-                [InlineKeyboardButton(t(update.effective_user.id, "btn_new_resume"), callback_data="new_resume")],
+                [InlineKeyboardButton("💎 Premium Features", callback_data="premium_features")],
+                [InlineKeyboardButton("✨ Create Resume", callback_data="new_resume")],
             ]),
         )
 
     except Exception as e:
         logger.error(f"RedeemKey Error: {e}")
-        await update.message.reply_text(t(update.effective_user.id, "redeem_error"), parse_mode="Markdown")
+        await update.message.reply_text("❌ Failed to redeem key. Please try again.", parse_mode="Markdown")
 
         
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1614,14 +1060,13 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         del user_data[user_id]
 
     await update.message.reply_text(
-        t(user_id, "cancel_message"),
+        "🚫 Operation cancelled. Your progress has been cleared.",
         reply_markup=ReplyKeyboardRemove(),
     )
     return ConversationHandler.END
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id if update else None
     error_msg = (
         f"⚠️ Error: {context.error}\n"
         f"Update: {update}\n"
@@ -1639,9 +1084,9 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Notify user
     if update and update.message:
-        await update.message.reply_text(t(user_id, "error_occurred"))
+        await update.message.reply_text("❌ An error occurred. Our team has been notified.")
     elif update and update.callback_query:
-        await update.callback_query.answer(t(user_id, "error_occurred_alert"), show_alert=True)
+        await update.callback_query.answer("❌ Error occurred. Please try again.", show_alert=True)
 
 async def security_monitor(context: ContextTypes.DEFAULT_TYPE):
     """Periodic security check"""
@@ -1726,7 +1171,6 @@ def setup_handlers(app):
     app.add_handler(CommandHandler("help", show_help))
     app.add_handler(CommandHandler("premium", show_premium_features))
     app.add_handler(CommandHandler("privacy", show_privacy_policy))
-    app.add_handler(CommandHandler("language", language_command))
     app.add_handler(CommandHandler("generatekey", generate_key))
     app.add_handler(CommandHandler("redeem", redeem_key))
     app.add_handler(CommandHandler("dbcheck", db_check))
